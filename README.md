@@ -1,4 +1,4 @@
-# Creative
+# Creative Quantumness
 
 Quantum computers have been used for creative projects. Here I make tools based on some of these projects, to make it easier for others to do similar things in future.
 
