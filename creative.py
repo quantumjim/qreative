@@ -86,6 +86,75 @@ class interrogate:
         self.bool = ( p>random.random() )
         self.prepare({basis:self.bool})
 
+class walker:
+    
+    def __init__(self,length,device,start):
+        
+        # device can be a string specifying a device or a number of qubits for all-to-all connectivity
+        if isinstance( device, str ):
+            backend = get_backend(device)
+            self.num = backend.configuration['n_qubits']
+            self.coupling = backend.configuration['coupling_map']
+        else:
+            self.num = device
+            self.coupling = []
+            for n in range(self.num):
+                for m in list(range(n))+list(range(n+1,self.num)):
+                    self.coupling.append([n,m])
+            
+        self.circuit = []
+        for l in range(length):
+            
+            gate = random.choice(['X','Y','cx'])
+            
+            if gate=='cx':
+                n = random.choice(self.coupling)
+            else:
+                n = random.randint(0,self.num-1)
+                
+            self.circuit.append( { 'gate':gate, 'n':n } )
+            
+        if not start:
+            self.start = ''
+            for n in range(self.num):
+                self.start += random.choice(['0','1'])
+        else:
+            self.start = start
+                
+            
+    def get_step(self,steps,backend='local_qasm_simulator',shots=1024):
+            
+        qr = QuantumRegister(self.num)
+        cr = ClassicalRegister(self.num)
+        qc = QuantumCircuit(qr,cr)
+        
+        for n in range(self.num):
+            if self.start[n]=='1':
+                qc.x(qr[n])
+        
+        for step in range(steps):
+            gate = self.circuit[step]['gate']
+            n = self.circuit[step]['n']
+            if gate=='cx':
+                qc.cx(qr[n[0]],qr[n[1]])
+            elif gate=='X':
+                qc.rx(np.pi/4,qr[n])
+            elif gate=='Y':
+                qc.ry(np.pi/4,qr[n])
+               
+        qc.measure(qr,cr)
+
+        job = execute(qc, backend=get_backend(backend), shots=shots)
+        stats = job.result().get_counts()
+        
+        for string in stats:
+            stats[string] = stats[string]/shots
+                    
+        return stats
+        
+        
+        
+        
 def bell_correlation (basis,backend='local_qasm_simulator',shots=1024):
     
     qr = QuantumRegister(2)
