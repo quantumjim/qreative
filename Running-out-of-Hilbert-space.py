@@ -111,11 +111,22 @@ while pos!=target and steps>=0:
     stats = w.get_step(steps)
     
     universe_and_neighbours(pos)
+    
+    print("\nThe highest strength universes can be reached by the following routes (portals can be used in any order)\n")
+    sorted_strings = sorted(stats,key=stats.get)[::-1]
+    for j in range(min(len(sorted_strings),3)):
+        portals = ""
+        for n in range(num):
+            if sorted_strings[j][n]!=pos[n]:
+                portals += str(n+1) + "--"
+        
+        if sorted_strings[j]!=pos:
+            print("    * The route --" + portals + " leads to a universe with strength " + get_percentage(stats,sorted_strings[j]) )
 
     unmoved = True
     while unmoved:
 
-        direction = input("Input the number for the direction you want to move (1, 2, 3, 4 or 5)\n")
+        direction = input("\nInput the number for the portal you want to use (1, 2, 3, 4 or 5)...\n")
         print("")
 
         try:
