@@ -4,6 +4,7 @@ from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, get_backe
 import numpy as np
 import random
 import matplotlib.pyplot as plt
+import os
 
 from qiskit import register
 
@@ -15,14 +16,10 @@ try:
     qx_config = {
         "APItoken": Qconfig.APItoken,
         "url": Qconfig.config['url']}
+    #set api
+    register(qx_config['APItoken'], qx_config['url'])
 except Exception as e:
-    print(e)
-    qx_config = {
-        "APItoken":"YOUR_TOKEN_HERE",
-        "url":"https://quantumexperience.ng.bluemix.net/api"}
-
-#set api
-register(qx_config['APItoken'], qx_config['url'])
+    pass
 
 class ladder:
     
@@ -88,7 +85,21 @@ class interrogate:
 
 class walker:
     
-    def __init__(self,length,device,start):
+    def __init__(self,length,device,start=None,samples=1,backend='local_qasm_simulator',shots=1024,method='run'):
+        
+        self.length = length
+        self.start = start
+        self.samples = samples
+        self.backend = backend
+        self.shots = shots
+        self.method = method
+        
+        if start:
+            self.start = start
+        else:
+            self.start = ''
+            for n in range(num):
+                self.start += random.choice(['0','1'])
         
         # device can be a string specifying a device or a number of qubits for all-to-all connectivity
         if isinstance( device, str ):
@@ -101,59 +112,108 @@ class walker:
             for n in range(self.num):
                 for m in list(range(n))+list(range(n+1,self.num)):
                     self.coupling.append([n,m])
-            
-        self.circuit = []
-        for l in range(length):
-            
-            gate = random.choice(['X','Y','cx'])
-            
-            if gate=='cx':
-                n = random.choice(self.coupling)
-            else:
-                n = random.randint(0,self.num-1)
-                
-            self.circuit.append( { 'gate':gate, 'n':n } )
-            
-        if not start:
-            self.start = ''
-            for n in range(self.num):
-                self.start += random.choice(['0','1'])
+         
+        if method=='run':
+            self.starts, self.circuits = self.setup_walk()
         else:
-            self.start = start
+            self.circuits = None
+        
+        self.starts,self.stats = self.get_data()
+            
+            
+    def setup_walk(self):
+        
+        circuits = []
+        starts = []
+        for sample in range(self.samples):
+            
+            circuit = []
+            for l in range(self.length):
+                gate = random.choice(['X','Y','XX'])
+                if gate=='XX':
+                    n = random.choice(self.coupling)
+                else:
+                    n = random.randint(0,self.num-1)
+                circuit.append( { 'gate':gate, 'n':n } ) 
+            circuits.append(circuit)
+
+            if not self.start:
+                start = ''
+                for n in range(self.num):
+                    start += random.choice(['0','1'])
+            else:
+                start = self.start
+            starts.append(start)
+            
+        return starts,circuits
+    
+    def get_data(self):
+        
+        if self.method=='run':
+            batch = []
+            for sample in range(self.samples):
+                for steps in range(self.length):
+
+                    qr = QuantumRegister(self.num)
+                    cr = ClassicalRegister(self.num)
+                    qc = QuantumCircuit(qr,cr)
+
+                    for n in range(self.num):
+                        if self.starts[sample][n]=='1':
+                            qc.x(qr[self.num-n-1])
+
+                    for step in range(steps):
+                        gate = self.circuits[sample][step]['gate']
+                        n = self.circuits[sample][step]['n']
+                        if gate=='XX':
+                            #qc.cx(qr[n[0]],qr[n[1]])
+                            qc.rx(np.pi/4,qr[n[0]])
+                            qc.cx(qr[n[0]],qr[n[1]])
+                        elif gate=='X':
+                            qc.rx(np.pi/4,qr[n])
+                        elif gate=='Y':
+                            qc.ry(np.pi/4,qr[n])
+
+                    qc.measure(qr,cr)
+                
+                    batch.append(qc)
+                    
+            job = execute(batch, backend=get_backend(self.backend), shots=self.shots)
+            
+            stats = []
+            j = 0
+            for sample in range(self.samples):
+                stats_for_sample = []
+                for step in range(self.length):
+                    this_stats = job.result().get_counts(batch[j])
+                    for string in this_stats:
+                        this_stats[string] = this_stats[string]/self.shots
+                    stats_for_sample.append( this_stats )
+                    j += 1
+                stats.append(stats_for_sample)
                 
             
-    def get_step(self,steps,backend='local_qasm_simulator',shots=1024):
-            
-        qr = QuantumRegister(self.num)
-        cr = ClassicalRegister(self.num)
-        qc = QuantumCircuit(qr,cr)
-        
-        for n in range(self.num):
-            if self.start[n]=='1':
-                qc.x(qr[n])
-        
-        for step in range(steps):
-            gate = self.circuit[step]['gate']
-            n = self.circuit[step]['n']
-            if gate=='cx':
-                qc.cx(qr[n[0]],qr[n[1]])
-            elif gate=='X':
-                qc.rx(np.pi/4,qr[n])
-            elif gate=='Y':
-                qc.ry(np.pi/4,qr[n])
-               
-        qc.measure(qr,cr)
+            saveFile = open('results.txt', 'w')
+            saveFile.write( str(stats) )
+            saveFile.close()
 
-        job = execute(qc, backend=get_backend(backend), shots=shots)
-        stats = job.result().get_counts()
-        
-        for string in stats:
-            stats[string] = stats[string]/shots
-                    
-        return stats
-        
-        
-        
+                
+        else:
+            
+            saveFile = open('results.txt')
+            saved_data = saveFile.readlines()
+            saveFile.close()
+            
+            stats_string = saved_data[0]
+            stats = eval(stats_string)
+            starts = []
+            for stats_for_sample in stats:
+                starts.append( max(stats_for_sample[0], key=stats_for_sample[0].get) )
+            
+            saveFile.close()
+            
+        return starts,stats
+    
         
 def bell_correlation (basis,backend='local_qasm_simulator',shots=1024):
     
