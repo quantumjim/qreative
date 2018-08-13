@@ -94,13 +94,6 @@ class walker:
         self.shots = shots
         self.method = method
         
-        if start:
-            self.start = start
-        else:
-            self.start = ''
-            for n in range(num):
-                self.start += random.choice(['0','1'])
-        
         # device can be a string specifying a device or a number of qubits for all-to-all connectivity
         if isinstance( device, str ):
             backend = get_backend(device)
@@ -114,6 +107,12 @@ class walker:
                     self.coupling.append([n,m])
          
         if method=='run':
+            if start:
+                self.start = start
+            else:
+                self.start = ''
+                for n in range(self.num):
+                    self.start += random.choice(['0','1'])
             self.starts, self.circuits = self.setup_walk()
         else:
             self.circuits = None
@@ -197,6 +196,7 @@ class walker:
             saveFile.write( str(stats) )
             saveFile.close()
 
+            starts = self.starts
                 
         else:
             
