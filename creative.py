@@ -94,84 +94,88 @@ class walker:
         self.shots = shots
         self.method = method
         
-        # device can be a string specifying a device or a number of qubits for all-to-all connectivity
+        # device can be a string specifying a device or a tuble specifying a grid
         if isinstance( device, str ):
             backend = get_backend(device)
             self.num = backend.configuration['n_qubits']
-            self.coupling = backend.configuration['coupling_map']
-        else:
-            self.num = device
-            self.coupling = []
+            coupling_array = backend.configuration['coupling_map']
+            self.coupling = {}
             for n in range(self.num):
-                for m in list(range(n))+list(range(n+1,self.num)):
-                    self.coupling.append([n,m])
+                self.coupling[n] = []
+            for pair in coupling_array:
+                for j in range(2):
+                    self.coupling[pair[j]].append(pair[(j+1)%2])
+                    self.coupling[pair[(j+1)%2]].append(pair[j])
+        else:
+            Lx = device[0]
+            Ly = device[1]
+            self.num = Lx*Ly
+            self.coupling = {}
+            for n in range(self.num):
+                self.coupling[n] = []
+            for x in range(Lx-1):
+                for y in range(Ly):
+                    n = x + y*Ly
+                    m = n+1
+                    self.coupling[n].append(m)
+                    self.coupling[m].append(n)
+            for x in range(Lx):
+                for y in range(Ly-1):
+                    n = x + y*Ly
+                    m = n+Ly
+                    self.coupling[n].append(m)
+                    self.coupling[m].append(n)
          
         if method=='run':
-            if start:
-                self.start = start
-            else:
-                self.start = ''
-                for n in range(self.num):
-                    self.start += random.choice(['0','1'])
-            self.starts, self.circuits = self.setup_walk()
+            self.starts, self.walks = self.setup_walks()
         else:
-            self.circuits = None
+            self.walks = None
         
         self.starts,self.stats = self.get_data()
-            
-            
-    def setup_walk(self):
         
-        circuits = []
+            
+    def setup_walks(self):
+        
+        walks = []
         starts = []
         for sample in range(self.samples):
             
-            circuit = []
-            for l in range(self.length):
-                gate = random.choice(['X','Y','XX'])
-                if gate=='XX':
-                    n = random.choice(self.coupling)
-                else:
-                    n = random.randint(0,self.num-1)
-                circuit.append( { 'gate':gate, 'n':n } ) 
-            circuits.append(circuit)
-
             if not self.start:
-                start = ''
-                for n in range(self.num):
-                    start += random.choice(['0','1'])
+                start = random.choice( range(self.num) )
             else:
                 start = self.start
             starts.append(start)
             
-        return starts,circuits
+            walk = [start]
+            for l in range(self.length):
+                neighbours = list( set(self.coupling[walk[-1]]) - set(walk) )
+                if neighbours:
+                    walk.append( random.choice( neighbours ) )
+                else:
+                    walk.append( random.choice( self.coupling[ walk[-1] ] ) )
+            walks.append(walk)
+            
+        return starts, walks
+    
     
     def get_data(self):
         
         if self.method=='run':
             batch = []
             for sample in range(self.samples):
-                for steps in range(self.length):
+                for steps in range(1,self.length+1):
 
                     qr = QuantumRegister(self.num)
                     cr = ClassicalRegister(self.num)
                     qc = QuantumCircuit(qr,cr)
+                    
+                    qc.h(qr[self.walks[sample][0]])
 
-                    for n in range(self.num):
-                        if self.starts[sample][n]=='1':
-                            qc.x(qr[self.num-n-1])
-
-                    for step in range(steps):
-                        gate = self.circuits[sample][step]['gate']
-                        n = self.circuits[sample][step]['n']
-                        if gate=='XX':
-                            #qc.cx(qr[n[0]],qr[n[1]])
-                            qc.rx(np.pi/4,qr[n[0]])
-                            qc.cx(qr[n[0]],qr[n[1]])
-                        elif gate=='X':
-                            qc.rx(np.pi/4,qr[n])
-                        elif gate=='Y':
-                            qc.ry(np.pi/4,qr[n])
+                    for step in range(1,steps):
+                        n = self.walks[sample][step-1]
+                        m = self.walks[sample][step]
+                        qc.cx(qr[n],qr[m])
+                        qc.h(qr[m])
 
                     qc.measure(qr,cr)
                 
@@ -179,41 +183,40 @@ class walker:
                     
             job = execute(batch, backend=get_backend(self.backend), shots=self.shots)
             
-            stats = []
+            probs = []
             j = 0
             for sample in range(self.samples):
-                stats_for_sample = []
+                probs_for_sample = []
                 for step in range(self.length):
-                    this_stats = job.result().get_counts(batch[j])
-                    for string in this_stats:
-                        this_stats[string] = this_stats[string]/self.shots
-                    stats_for_sample.append( this_stats )
+                    stats = job.result().get_counts(batch[j])
+                    prob = [0]*self.num
+                    for string in stats:
+                        for n in range(self.num):
+                            if string[n]=='1':
+                                prob[n] += stats[string]/self.shots
+                    probs_for_sample.append( prob )
                     j += 1
-                stats.append(stats_for_sample)
-                
+                probs.append(probs_for_sample)
+               
+            starts = self.starts
             
             saveFile = open('results.txt', 'w')
-            saveFile.write( str(stats) )
+            saveFile.write( str(probs) )
+            saveFile.write( str(starts) )
             saveFile.close()
-
-            starts = self.starts
-                
+        
         else:
             
             saveFile = open('results.txt')
             saved_data = saveFile.readlines()
             saveFile.close()
             
-            stats_string = saved_data[0]
-            stats = eval(stats_string)
-            starts = []
-            for stats_for_sample in stats:
-                starts.append( max(stats_for_sample[0], key=stats_for_sample[0].get) )
+            probs_string = saved_data[0]
+            starts_string = saved_data[1]
+            probs = eval(probs_string)
+            starts = eval(starts_string)
             
-            saveFile.close()
-            
-        return starts,stats
-    
+        return starts,probs 
         
 def bell_correlation (basis,backend='local_qasm_simulator',shots=1024):
     
