@@ -1,14 +1,16 @@
 # coding: utf-8
 
-from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, get_backend, execute
+try:
+    from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, get_backend, execute
+    from qiskit import register
+except:
+    print("Warning: QISKit is not installed\n         This won't be a problem if you only run from existing data")
+
 import numpy as np
 import random
 import matplotlib.pyplot as plt
 import os
 
-from qiskit import register
-
-#import Qconfig and set APIToken and API url
 try:
     import sys
     sys.path.append("../") # go to parent dir
@@ -19,21 +21,30 @@ try:
     #set api
     register(qx_config['APItoken'], qx_config['url'])
 except Exception as e:
-    pass
+    print("Warning: Credentials required for using remote IBMQ devices has not been set up")
 
-class ladder:
     
-    def __init__(self,d,shots=1024):
+class ladder:
+    """An integer implemented on a single qubit. Addition and subtraction are implemented via partial NOT gates."""
+    
+    def __init__(self,d):
+        """Create a new ladder object. This has the attribute `value`, which is an int that can be 0 at minimum and the supplied value `d` at maximum. This value is initialized to 0."""
         self.d = d
-        self.shots = shots
         self.qr = QuantumRegister(1)
         self.cr = ClassicalRegister(1)
         self.qc = QuantumCircuit(self.qr, self.cr)
         
     def add(self,delta):
+        """Changes value of ladder object by the given amount `delta`. This is initially done by addition, but it changes to subtraction once the maximum value of `d` is reached. It will then change back to addition once 0 is reached, and so on.
+        
+        delta = Amount by which to change the value of the ladder object. Can be int or float."""
         self.qc.rx(np.pi*delta/self.d,self.qr[0])
         
     def value(self,backend='local_qasm_simulator',shots=1024):
+        """Returns the current version of the ladder operator as an int. If floats have been added to this value, the sum of all floats added thus far are rounded.
+        
+        backend = A string specifying a backend. The noisy behaviour from a real device will result in some randomness in the value given, and can lead to the reported value being less than the true value on average. These effects will be more evident for high `d`.
+        shots = Number of shots used when extracting results from the qubit. A low value will result in randomness in the value given. This should be neglible when the value is a few orders of magnitude greater than `d`. """  
         self.qc.measure(self.qr,self.cr)
         job = execute(self.qc, backend=get_backend(backend), shots=shots)
         if '1' in job.result().get_counts():
@@ -43,9 +54,12 @@ class ladder:
         delta = round(2*np.arcsin(np.sqrt(p))*self.d/np.pi)
         return int(delta)
 
-class interrogate:
+    
+class twobit:
+    """An object that can store a single boolean value, but can do so in two incompatible ways. It is implemented on a single qubit using two complementary measurement bases."""
     
     def __init__(self):
+        """Create a twobit object, initialized to give a random boolean value for both measurement types."""
         self.qr = QuantumRegister(1)
         self.cr = ClassicalRegister(1)
         self.qc = QuantumCircuit(self.qr, self.cr)
@@ -53,6 +67,9 @@ class interrogate:
         self.prepare({'Y':None})
         
     def prepare(self,state):
+        """Supplying `state={basis,b}` prepares a twobit with the boolean `b` stored using the measurement type specified by `basis` (which can be 'X' or 'Z').
+        
+        Supplying `basis='Y'` (and arbitrary `b`) will result in the twobit giving a random result for both measurement types. """
         self.qc = QuantumCircuit(self.qr, self.cr)
         if 'Y' in state:
             self.qc.h(self.qr[0])
@@ -66,6 +83,12 @@ class interrogate:
                 self.qc.x(self.qr[0])
                 
     def measure(self,basis,backend='local_qasm_simulator',shots=1024,mitigate=True):
+        """Extracts the boolean value for the given measurement type. The twobit is also reinitialized to ensure that the same value would if the same call to `measure()` was repeated.
+        
+        basis = 'X' or 'Z', specifying the desired measurement type.
+        backend = A string specifying a backend. The noisy behaviour from a real device will result in some randomness in the value given, even if it has been set to a definite value for a given measurement type. This effect can be reduced using `mitigate=True`.
+        shots = Number of shots used when extracting results from the qubit. A value of greater than 1 only has any effect for `mitigate=True`, in which case larger values of `shots` allow for better mitigation.
+        mitigate = Boolean specifying whether mitigation should be applied. If so the values obtained over `shots` samples are considered, and the fraction which output `True` is calculated. If this is more than 90%, measure will return `True`. If less than 10%, it will return `False`, otherwise it returns a random value using the fraction as the probability."""
         if basis=='X':
             self.qc.h(self.qr[0])
         self.qc.measure(self.qr,self.cr)
@@ -83,8 +106,196 @@ class interrogate:
         self.bool = ( p>random.random() )
         self.prepare({basis:self.bool})
 
-class walker:
+        
+def bell_correlation (basis,backend='local_qasm_simulator',shots=1024):
+    """Prepares a rotated Bell state of two qubits. Measurement is done in the specified basis for each qubit. The fraction of results for which the two qubits agree is returned.
     
+    basis = String specifying measurement bases. 'XX' denotes X measurement on each qubit, 'XZ' denotes X measurement on qubit 0 and Z on qubit 1, vice-versa for 'ZX', and 'ZZ' denotes 'Z' measurement on both.
+    backend = A string specifying a backend. The noisy behaviour from a real device will result in the correlations being less strong than in the ideal case.
+    shots = Number of shots used when extracting results from the qubit. For shots=1, the returned value will randomly be 0 (if the results for the two qubits disagree) or 1 (if they agree). For large shots, the returned value will be probability for this random process.
+    """
+    qr = QuantumRegister(2)
+    cr = ClassicalRegister(2)
+    qc = QuantumCircuit(qr,cr)
+
+    qc.h( qr[0] )
+    qc.cx( qr[0], qr[1] )
+    qc.ry( np.pi/4, qr[1])
+    qc.h( qr[1] )
+    qc.x( qr[0] )
+    qc.z( qr[0] )
+    
+    for j in range(2):
+        if basis[j]=='X':
+            qc.h(qr[j])
+
+    qc.measure(qr,cr)
+    
+    job = execute(qc, backend=get_backend(backend), shots=shots)
+    stats = job.result().get_counts()
+    
+    P = 0
+    for string in stats:
+        p = stats[string]/shots
+        if string in ['00','11']:
+            P += p
+            
+    return P
+
+def bitstring_superposer (string,backend='local_qasm_simulator',shots=1024):
+    """Prepares the superposition of the two given n bit strings. The number of qubits used is equal to the length of the string. The superposition is measured, and the process repeated many times. A dictionary with the fraction of shots for which each string occurred is returned.
+    
+    string = List of two binary strings. If the list has more than two elements, all but the first two are ignored.
+    backend = A string specifying a backend. The noisy behaviour from a real device will result in strings other than the two supplied occuring with non-zero fraction.
+    shots = Number of times the process is repeated to calculate the fractions. For shots=1, only a single randomnly generated bit string is return (as the key of a dict)."""
+    num = max( len(string[0]), len(string[1]) )
+    for j in range(2):
+        string[j] = '0'*(num-len(string[j])) + string[j]
+    
+    qr = QuantumRegister(num)
+    cr = ClassicalRegister(num)
+    qc = QuantumCircuit(qr,cr)
+    
+    diff = []
+    for bit in range(num):
+        
+        if string[0][bit]==string[1][bit]:
+            if string[0][bit]=='1':
+                qc.x(qr[bit])
+                
+        if string[0][bit]!=string[1][bit]:
+            diff.append(bit)
+    
+    if diff:
+        qc.h(qr[diff[0]])
+        for bit in diff[1:]:
+            qc.cx(qr[diff[0]],qr[bit])
+
+        for bit in diff:
+            if string[0][bit]=='1':
+                qc.x(qr[bit])
+            
+    qc.measure(qr,cr)
+    
+    job = execute(qc, backend=get_backend(backend), shots=shots)
+    stats_raw = job.result().get_counts()
+    
+    stats = {}
+    for string in stats_raw:
+        stats[string[::-1]] = stats_raw[string]/shots
+
+    return stats
+    
+def emoticon_superposer (emoticons,backend='local_qasm_simulator',shots=1024,figsize=(20,20)):
+    """Creates superposition of two emoticons.
+    
+    A dictionary is returned, which supplies the relative strength of each pair of ascii characters in the superposition. An image representing the superposition, with each pair of ascii characters appearing with an weight that represents their strength in the superposition, is also created and saved.
+    
+    emoticons = A list of two strings, each of which is composed of two ascii characters, such as [ ";)" , "8)" ].
+    backend = A string specifying a backend. The noisy behaviour from a real device will result in emoticons other than the two supplied occuring with non-zero strength.
+    shots = Number of times the process is repeated to calculate the fractions used as strengths. For shots=1, only a single randomnly generated emoticon is return (as the key of the dict)."""
+    string = []
+    for emoticon in emoticons:
+        bin4emoticon = ""
+        for character in emoticon:
+            bin4char = bin(ord(character))[2:]
+            bin4char = (8-len(bin4char))*'0'+bin4char
+            bin4emoticon += bin4char
+        string.append(bin4emoticon)
+        
+    stats = bitstring_superposer(string,backend='local_qasm_simulator',shots=1024)
+    
+    fig = plt.figure()
+    ax=fig.add_subplot(111)
+    plt.rc('font', family='monospace')
+    ascii_stats = {}
+    for string in stats:
+        char = chr(int( string[0:8] ,2)) # get string of the leftmost 8 bits and convert to an ASCII character
+        char += chr(int( string[8:16] ,2)) # do the same for string of rightmost 8 bits, and add it to the previous character
+        prob = stats[string] # fraction of shots for which this result occurred
+        ascii_stats[char] = prob
+        # create plot with all characters on top of each other with alpha given by how often it turned up in the output
+        plt.annotate( char, (0.5,0.5), va="center", ha="center", color = (0,0,0, prob ), size = 300)
+            
+    plt.axis('off')
+    plt.show()
+    
+    return ascii_stats
+
+
+def image_superposer (all_images,images,backend='local_qasm_simulator',shots=1024,figsize=(20,20)):
+    """Creates superposition of two images from a set of images.
+    
+    A dictionary is returned, which supplies the relative strength of each pair of ascii characters in the superposition. An image representing the superposition, with each of the original aimages appearing with an weight that represents their strength in the superposition, is also created and saved.
+    
+    all_images = List of strings that are filenames for a set of images.  The files should be located in 'images/<filename>.png.
+    images = List of strings for image files to be superposed. This can either contain the strings for two files, or for all in all_images. Other options are not currently supported.
+    backend = A string specifying a backend. The noisy behaviour from a real device will result in images other than those intended appearing with non-zero strength.
+    shots = Number of times the process is repeated to calculate the fractions used as strengths. For shots=1, only a single randomnly generated emoticon is return (as the key of the dict)."""
+    image_num = len(all_images)
+    bit_num = int(np.ceil( np.log2(image_num) ))
+    all_images += [None]*(2**bit_num-image_num)
+    
+    if images==all_images:
+        qr = QuantumRegister(bit_num)
+        cr = ClassicalRegister(bit_num)
+        qc = QuantumCircuit(qr,cr)
+        for n in range(bit_num):
+            qc.h(qr[n])
+        qc.measure(qr,cr)
+        job = execute(qc, backend=get_backend(backend), shots=shots)
+        stats_raw = job.result().get_counts()
+        full_stats = {}
+        for string in stats_raw:
+            full_stats[string[::-1]] = stats_raw[string]/shots  
+    else:
+        strings = []
+        for j in range(2):
+            string = "{0:b}".format(all_images.index(images[j]))
+            string = '0'*(bit_num-len(string)) + string
+            strings.append( string )
+        full_stats = bitstring_superposer(strings,backend=backend,shots=1024)
+        
+    Z = 0
+    for j in range(image_num):
+        string = "{0:b}".format(j)
+        string = '0'*(bit_num-len(string)) + string
+        if string in full_stats:
+            Z += full_stats[string]    
+    stats = {}
+    for j in range(image_num):
+        string = "{0:b}".format(j)
+        string = '0'*(bit_num-len(string)) + string
+        if string in full_stats:
+            stats[string] = full_stats[string]/Z
+            
+    # sort from least to most likely and create corresponding lists of the strings and fractions
+    sorted_strings = sorted(stats,key=stats.get)
+    sorted_fracs = sorted(stats.values())
+    n = len(stats)
+    # construct alpha values such that the final image is a weighted average of the images specified by the keys of `stats`
+    alpha = [ sorted_fracs[0] ]
+    for j in range(0,n-1):
+        alpha.append( ( alpha[j]/(1-alpha[j]) ) * ( sorted_fracs[j+1] / sorted_fracs[j] ) )
+    
+    fig, ax = plt.subplots(figsize=figsize)
+    for j in reversed(range(n)):
+        filename = all_images[int(sorted_strings[j],2)]
+        if filename:
+            image = plt.imread("images/"+filename+".png")
+            plt.imshow(image,alpha=alpha[j])
+    plt.axis('off')
+    plt.show()
+    
+    image_stats = {}
+    for string in stats:
+        image_stats[ all_images[int(string,2)] ] = stats[string]
+    
+    return image_stats
+
+
+class walker:
+    """Work in progress"""
     def __init__(self,length,device,start=None,samples=1,backend='local_qasm_simulator',shots=1024,method='run'):
         
         self.length = length
@@ -217,129 +428,3 @@ class walker:
             starts = eval(starts_string)
             
         return starts,probs 
-        
-def bell_correlation (basis,backend='local_qasm_simulator',shots=1024):
-    
-    qr = QuantumRegister(2)
-    cr = ClassicalRegister(2)
-    qc = QuantumCircuit(qr,cr)
-
-    qc.h( qr[0] )
-    qc.cx( qr[0], qr[1] )
-    qc.ry( np.pi/4, qr[1])
-    qc.h( qr[1] )
-    qc.x( qr[0] )
-    qc.z( qr[0] )
-    
-    for j in range(2):
-        if basis[j]=='X':
-            qc.h(qr[j])
-
-    qc.measure(qr,cr)
-    
-    job = execute(qc, backend=get_backend(backend), shots=shots)
-    stats = job.result().get_counts()
-    
-    P = 0
-    for string in stats:
-        p = stats[string]/shots
-        if string in ['00','11']:
-            P += p
-            
-    return P
-
-def bitstring_superposer (string,backend='local_qasm_simulator',shots=1024):
-    
-    num = len(string[0])
-    
-    qr = QuantumRegister(num)
-    cr = ClassicalRegister(num)
-    qc = QuantumCircuit(qr,cr)
-    
-    diff = []
-    for bit in range(num):
-        
-        if string[0][bit]==string[1][bit]:
-            if string[0][bit]=='1':
-                qc.x(qr[bit])
-                
-        if string[0][bit]!=string[1][bit]:
-            diff.append(bit)
-    
-    if diff:
-        qc.h(qr[diff[0]])
-        for bit in diff[1:]:
-            qc.cx(qr[diff[0]],qr[bit])
-
-        for bit in diff:
-            if string[0][bit]=='1':
-                qc.x(qr[bit])
-            
-    qc.measure(qr,cr)
-    
-    job = execute(qc, backend=get_backend(backend), shots=shots)
-    stats_raw = job.result().get_counts()
-    
-    stats = {}
-    for string in stats_raw:
-        stats[string[::-1]] = stats_raw[string]/shots
-
-    return stats
-    
-def emoticon_superposer (emoticons,backend='local_qasm_simulator',shots=1024,verbose=False):
-    
-    string = []
-    for emoticon in emoticons:
-        bin4emoticon = ""
-        for character in emoticon:
-            bin4char = bin(ord(character))[2:]
-            bin4char = (8-len(bin4char))*'0'+bin4char
-            bin4emoticon += bin4char
-        string.append(bin4emoticon)
-        
-    stats = bitstring_superposer(string,backend='local_qasm_simulator',shots=1024)
-    
-    filename = 'superposition'
-    for string in stats:
-        char = chr(int( string[0:8] ,2)) # get string of the leftmost 8 bits and convert to an ASCII character
-        char += chr(int( string[8:16] ,2)) # do the same for string of rightmost 8 bits, and add it to the previous character
-        prob = stats[string] # fraction of shots for which this result occurred
-        # create plot with all characters on top of each other with alpha given by how often it turned up in the output
-        plt.annotate( char, (0.5,0.5), va="center", ha="center", color = (0,0,0, prob ), size = 300)
-        if verbose:
-            if (prob>0.05): # list prob and char for the dominant results (occurred for more than 5% of shots)
-                print(str(prob)+"\t"+char)
-        filename += '_' + char     
-            
-    plt.axis('off')
-   
-    plt.savefig(filename+'.png')
-
-# to be used in image superposer
-'''
-    # sort from least to most likely and create corresponding lists of the strings and fractions
-    sorted_strings = sorted(stats,key=stats.get)
-    sorted_fracs = sorted(stats.values())
-    n = len(stats) # it'll also be handy to know their lengths
-    
-    # construct alpha values such that the final image is a weighted average of the images specified by the keys of `stats`
-    alpha = [ sorted_fracs[0] ]
-    for j in range(0,n-1):
-        alpha.append( ( alpha[j]/(1-alpha[j]) ) * ( sorted_fracs[j+1] / sorted_fracs[j] ) )
-    
-    print(sorted_fracs)
-    print(alpha)
-    
-    plt.rc('font', family='monospace')
-
-    ax = plt.subplot(111)
-
-    
-    for j in reversed(range(n)):
-        char = chr(int( sorted_strings[j][0:8] ,2)) # get string of the leftmost 8 bits and convert to an ASCII character
-        char += chr(int( sorted_strings[j][8:16] ,2)) # do the same for string of rightmost 8 bits, and add it to the previous character   
-        plt.annotate( char, (0.5,0.5), va="center", ha="center", color = (0,0,0, alpha[j] ), size = 300)
-    plt.axis('off')
-    plt.show()
-'''
-
