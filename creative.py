@@ -10,6 +10,7 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 import os
+import copy
 
 try:
     import sys
@@ -21,7 +22,7 @@ try:
     #set api
     register(qx_config['APItoken'], qx_config['url'])
 except Exception as e:
-    print("Warning: Credentials required for using remote IBMQ devices has not been set up")
+    print("Warning: Credentials required for using remote IBMQ devices hae not been set up")
 
     
 class ladder:
@@ -45,8 +46,10 @@ class ladder:
         
         backend = A string specifying a backend. The noisy behaviour from a real device will result in some randomness in the value given, and can lead to the reported value being less than the true value on average. These effects will be more evident for high `d`.
         shots = Number of shots used when extracting results from the qubit. A low value will result in randomness in the value given. This should be neglible when the value is a few orders of magnitude greater than `d`. """  
-        self.qc.measure(self.qr,self.cr)
-        job = execute(self.qc, backend=get_backend(backend), shots=shots)
+        temp_qc = copy.deepcopy(self.qc)
+        temp_qc.barrier(self.qr)
+        temp_qc.measure(self.qr,self.cr)
+        job = execute(temp_qc, backend=get_backend(backend), shots=shots)
         if '1' in job.result().get_counts():
             p = job.result().get_counts()['1']/shots
         else:
@@ -63,7 +66,6 @@ class twobit:
         self.qr = QuantumRegister(1)
         self.cr = ClassicalRegister(1)
         self.qc = QuantumCircuit(self.qr, self.cr)
-        self.bool = None
         self.prepare({'Y':None})
         
     def prepare(self,state):
@@ -82,7 +84,7 @@ class twobit:
             if state['Z']:
                 self.qc.x(self.qr[0])
                 
-    def measure(self,basis,backend='local_qasm_simulator',shots=1024,mitigate=True):
+    def value (self,basis,backend='local_qasm_simulator',shots=1024,mitigate=True):
         """Extracts the boolean value for the given measurement type. The twobit is also reinitialized to ensure that the same value would if the same call to `measure()` was repeated.
         
         basis = 'X' or 'Z', specifying the desired measurement type.
@@ -91,6 +93,7 @@ class twobit:
         mitigate = Boolean specifying whether mitigation should be applied. If so the values obtained over `shots` samples are considered, and the fraction which output `True` is calculated. If this is more than 90%, measure will return `True`. If less than 10%, it will return `False`, otherwise it returns a random value using the fraction as the probability."""
         if basis=='X':
             self.qc.h(self.qr[0])
+        self.qc.barrier(self.qr)
         self.qc.measure(self.qr,self.cr)
         job = execute(self.qc, backend=get_backend(backend), shots=shots)
         stats = job.result().get_counts()
@@ -103,8 +106,10 @@ class twobit:
                 p = 0
             elif p>0.9:
                 p = 1
-        self.bool = ( p>random.random() )
-        self.prepare({basis:self.bool})
+        measured_value = ( p>random.random() )
+        self.prepare({basis:measured_value})
+        
+        return measured_value
 
         
 def bell_correlation (basis,backend='local_qasm_simulator',shots=1024):
@@ -122,13 +127,14 @@ def bell_correlation (basis,backend='local_qasm_simulator',shots=1024):
     qc.cx( qr[0], qr[1] )
     qc.ry( np.pi/4, qr[1])
     qc.h( qr[1] )
-    qc.x( qr[0] )
-    qc.z( qr[0] )
+    #qc.x( qr[0] )
+    #qc.z( qr[0] )
     
     for j in range(2):
         if basis[j]=='X':
             qc.h(qr[j])
 
+    qc.barrier(qr)
     qc.measure(qr,cr)
     
     job = execute(qc, backend=get_backend(backend), shots=shots)
@@ -174,9 +180,10 @@ def bitstring_superposer (string,backend='local_qasm_simulator',shots=1024):
         for bit in diff:
             if string[0][bit]=='1':
                 qc.x(qr[bit])
-            
-    qc.measure(qr,cr)
     
+    qc.barrier(qr)
+    qc.measure(qr,cr)
+        
     job = execute(qc, backend=get_backend(backend), shots=shots)
     stats_raw = job.result().get_counts()
     
@@ -203,7 +210,7 @@ def emoticon_superposer (emoticons,backend='local_qasm_simulator',shots=1024,fig
             bin4emoticon += bin4char
         string.append(bin4emoticon)
         
-    stats = bitstring_superposer(string,backend='local_qasm_simulator',shots=1024)
+    stats = bitstring_superposer(string,backend=backend,shots=shots)
     
     fig = plt.figure()
     ax=fig.add_subplot(111)
@@ -215,7 +222,10 @@ def emoticon_superposer (emoticons,backend='local_qasm_simulator',shots=1024,fig
         prob = stats[string] # fraction of shots for which this result occurred
         ascii_stats[char] = prob
         # create plot with all characters on top of each other with alpha given by how often it turned up in the output
-        plt.annotate( char, (0.5,0.5), va="center", ha="center", color = (0,0,0, prob ), size = 300)
+        try:
+            plt.annotate( char, (0.5,0.5), va="center", ha="center", color = (0,0,0, prob ), size = 300)
+        except:
+            pass
             
     plt.axis('off')
     plt.show()
@@ -242,6 +252,7 @@ def image_superposer (all_images,images,backend='local_qasm_simulator',shots=102
         qc = QuantumCircuit(qr,cr)
         for n in range(bit_num):
             qc.h(qr[n])
+        qc.barrier(qr)
         qc.measure(qr,cr)
         job = execute(qc, backend=get_backend(backend), shots=shots)
         stats_raw = job.result().get_counts()
@@ -254,7 +265,7 @@ def image_superposer (all_images,images,backend='local_qasm_simulator',shots=102
             string = "{0:b}".format(all_images.index(images[j]))
             string = '0'*(bit_num-len(string)) + string
             strings.append( string )
-        full_stats = bitstring_superposer(strings,backend=backend,shots=1024)
+        full_stats = bitstring_superposer(strings,backend=backend,shots=shots)
         
     Z = 0
     for j in range(image_num):
@@ -388,6 +399,7 @@ class walker:
                         qc.cx(qr[n],qr[m])
                         qc.h(qr[m])
 
+                    qc.barrier(qr)
                     qc.measure(qr,cr)
                 
                     batch.append(qc)
