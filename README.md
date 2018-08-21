@@ -2,6 +2,8 @@
 
 Quantum computers have been used for creative projects. These tools are based on some of these projects, and are designed to make it easier to do similar things in future.
 
+Examples of how to use these tools can be found in [this jupyter notebook](how-to-use.ipynb).
+
 ### Projects on which the current tools are based
 
 #### From the [Condensed Matter and Quantum computing Theory Group](http://www.quantumtheory.unibas.ch/), University of Basel
