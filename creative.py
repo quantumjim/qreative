@@ -1,7 +1,7 @@
 # coding: utf-8
 
 try:
-    from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, get_backend, execute
+    from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, get_backend, available_backends, execute
     from qiskit import register
 except:
     print("Warning: QISKit is not installed\n         This won't be a problem if you only run from existing data")
@@ -11,6 +11,7 @@ import random
 import matplotlib.pyplot as plt
 import os
 import copy
+import networkx as nx
 
 try:
     import sys
@@ -303,6 +304,164 @@ def image_superposer (all_images,images,backend='local_qasm_simulator',shots=102
         image_stats[ all_images[int(string,2)] ] = stats[string]
     
     return image_stats
+
+
+class layout:
+    
+    def __init__(self,device):
+                
+        if device in ['ibmqx2', 'ibmqx4', 'ibmqx5']:
+                        
+            backend = get_backend(device)
+            self.num = backend.configuration['n_qubits']
+            coupling = backend.configuration['coupling_map']
+            self.pairs = {}
+            char = 65
+            for pair in coupling:
+                self.pairs[chr(char)] = pair
+                char += 1
+            if device in ['ibmqx2','ibmqx4']:
+                self.pos = { 0: [1,1], 1: [1,0], 2: [0.5,0.5], 3: [0,0], 4: [0,1] }        
+            elif device=='ibmqx5':
+                self.pos = { 0: [0,0], 1: [0,1],  2: [1,1],  3: [2,1],  4: [3,1],  5: [4,1],  6: [5,1],  7: [6,1],
+8: [7,1], 9: [7,0], 10: [6,0], 11: [5,0], 12: [4,0], 13: [3,0], 14: [2,0], 15: [1,0] }
+            
+        elif type(device) is list:
+            
+            Lx = device[0]
+            Ly = device[1]
+            self.num = Lx*Ly
+            self.pairs = {}
+            char = 65
+            for x in range(Lx-1):
+                for y in range(Ly):
+                    n = x + y*Ly
+                    m = n+1
+                    self.pairs[chr(char)] = [n,m]
+                    char += 1
+            for x in range(Lx):
+                for y in range(Ly-1):
+                    n = x + y*Ly
+                    m = n+Ly
+                    self.pairs[chr(char)] = [n,m]
+                    char += 1
+            self.pos = {}
+            for x in range(Lx):
+                for y in range(Ly):
+                    n = x + y*Ly
+                    self.pos[n] = [x,y]
+        else:
+                
+            print("Error: Device not recognized.\nMake sure it is a list of two integers (to specify a grid) or one of the supported IBM devices ('ibmqx2', 'ibmqx4' and 'ibmqx5').")
+        
+        for pair in self.pairs:
+            self.pos[pair] = [(self.pos[self.pairs[pair][0]][j] + self.pos[self.pairs[pair][1]][j])/2 for j in range(2)]
+  
+    def calculate_probs(self,raw_stats):
+        
+        Z = 0
+        for string in raw_stats:
+            Z += raw_stats[string]
+        stats = {}
+        for string in raw_stats:
+            stats[string] = raw_stats[string]/Z
+        
+        probs = {}
+        for n in self.pos:
+            probs[n] = 0
+        
+        for string in stats:
+            for n in range(self.num):
+                if string[n]=='1':
+                    probs[n] += stats[string]
+            for pair in self.pairs: 
+                if string[self.pairs[pair][0]]==string[self.pairs[pair][1]]:
+                    probs[pair] += stats[string]
+            
+        return probs
+                    
+    def plot(self,probs=None,labels=None,colors=None,sizes=None):
+                        
+        G=nx.Graph()
+        
+        for pair in self.pairs:
+            G.add_edge(self.pairs[pair][0],self.pairs[pair][1])
+            G.add_edge(self.pairs[pair][0],pair)
+            G.add_edge(self.pairs[pair][1],pair)
+        
+        if probs:
+            labels = {}
+            colors = {}
+            sizes = {}
+            for node in G:
+                labels[node] = "%.0f" % ( 100 * ( probs[node] ) )
+                colors[node] =( 1-probs[node],0,probs[node] )
+                if type(node)!=str:
+                    if labels[node]=='0':
+                        sizes[node] = 3000
+                    elif labels[node]=='100':
+                        sizes[node] = 5000
+                    else:
+                        sizes[node] = 4000 
+                else:
+                    if labels[node]=='0':
+                        sizes[node] = 800
+                    elif labels[node]=='100':
+                        sizes[node] = 1500
+                    else:
+                        sizes[node] = 1150 
+        else:
+            if not labels:
+                labels = {}
+                for node in G:
+                    labels[node] = node
+            if not colors:
+                colors = {}
+                for node in G:
+                    if type(node) is int:
+                        colors[node] = (node/self.num,0,1-node/self.num)
+                    else:
+                        colors[node] = (0,0,0)
+            if not sizes:
+                sizes = {}
+                for node in G:
+                    if type(node)!=str:
+                        sizes[node] = 3000
+                    else:
+                        sizes[node] = 750
+
+        # convert to lists, which is required by nx
+        color_list = []
+        size_list = []
+        for node in G:
+            color_list.append(colors[node])
+            size_list.append(sizes[node])
+                        
+        area = [0,0]
+        for coord in self.pos.values():
+            for j in range(2):
+                area[j] = max(area[j],coord[j])
+        for j in range(2):
+            area[j] = (area[j] + 1 )*1.1
+            
+        if area[0]>2*area[1]:
+            ratio = 0.65
+        else:
+            ratio = 1
+
+        plt.figure(2,figsize=(2*area[0],2*ratio*area[1])) 
+        nx.draw(G, self.pos, node_color = color_list, node_size = size_list, labels = labels, with_labels = True,
+                font_color ='w', font_size = 18)
+        plt.show() 
+        
+
+
+
+
+
+
+
+
 
 
 class walker:
