@@ -372,15 +372,15 @@ class layout:
         
         for string in stats:
             for n in range(self.num):
-                if string[n]=='1':
+                if string[-n-1]=='1':
                     probs[n] += stats[string]
             for pair in self.pairs: 
-                if string[self.pairs[pair][0]]==string[self.pairs[pair][1]]:
+                if string[-self.pairs[pair][0]-1]!=string[-self.pairs[pair][1]-1]:
                     probs[pair] += stats[string]
             
         return probs
                     
-    def plot(self,probs=None,labels=None,colors=None,sizes=None):
+    def plot(self,probs={},labels={},colors={},sizes={}):
                         
         G=nx.Graph()
         
@@ -390,26 +390,40 @@ class layout:
             G.add_edge(self.pairs[pair][1],pair)
         
         if probs:
+            
+            label_changes = copy.deepcopy(labels)
+            color_changes = copy.deepcopy(colors)
+            size_changes = copy.deepcopy(sizes)
+            
             labels = {}
             colors = {}
             sizes = {}
             for node in G:
-                labels[node] = "%.0f" % ( 100 * ( probs[node] ) )
-                colors[node] =( 1-probs[node],0,probs[node] )
-                if type(node)!=str:
-                    if labels[node]=='0':
-                        sizes[node] = 3000
-                    elif labels[node]=='100':
-                        sizes[node] = 5000
-                    else:
-                        sizes[node] = 4000 
+                if probs[node]>1:
+                    labels[node] = ""
+                    colors[node] = 'grey'
+                    sizes[node] = 3000
                 else:
-                    if labels[node]=='0':
-                        sizes[node] = 800
-                    elif labels[node]=='100':
-                        sizes[node] = 1500
+                    labels[node] = "%.0f" % ( 100 * ( probs[node] ) )
+                    colors[node] =( 1-probs[node],0,probs[node] )
+                    if type(node)!=str:
+                        if labels[node]=='0':
+                            sizes[node] = 3000
+                        else:
+                            sizes[node] = 4000 
                     else:
-                        sizes[node] = 1150 
+                        if labels[node]=='0':
+                            sizes[node] = 800
+                        else:
+                            sizes[node] = 1150
+                                         
+            for node in label_changes:
+                labels[node] = label_changes[node]
+            for node in color_changes:
+                colors[node] = color_changes[node]      
+            for node in size_changes:
+                sizes[node] = size_changes[node]                   
+                                        
         else:
             if not labels:
                 labels = {}
@@ -436,7 +450,7 @@ class layout:
         for node in G:
             color_list.append(colors[node])
             size_list.append(sizes[node])
-                        
+        
         area = [0,0]
         for coord in self.pos.values():
             for j in range(2):
