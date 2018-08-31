@@ -149,50 +149,76 @@ def bell_correlation (basis,backend='local_qasm_simulator',shots=1024):
             
     return P
 
-def bitstring_superposer (string,backend='local_qasm_simulator',shots=1024):
+def bitstring_superposer (strings,backend='local_qasm_simulator',shots=1024):
     """Prepares the superposition of the two given n bit strings. The number of qubits used is equal to the length of the string. The superposition is measured, and the process repeated many times. A dictionary with the fraction of shots for which each string occurred is returned.
     
     string = List of two binary strings. If the list has more than two elements, all but the first two are ignored.
     backend = A string specifying a backend. The noisy behaviour from a real device will result in strings other than the two supplied occuring with non-zero fraction.
     shots = Number of times the process is repeated to calculate the fractions. For shots=1, only a single randomnly generated bit string is return (as the key of a dict)."""
-    num = max( len(string[0]), len(string[1]) )
-    for j in range(2):
-        string[j] = '0'*(num-len(string[j])) + string[j]
     
-    qr = QuantumRegister(num)
-    cr = ClassicalRegister(num)
-    qc = QuantumCircuit(qr,cr)
+    # make it so that the input is a list of list of strings, even if it was just a list of strings
+    strings_list = []
+    if type(strings[0])==str:
+        strings_list = [strings]
+    else:
+        strings_list = strings
     
-    diff = []
-    for bit in range(num):
+    batch = []
+    for strings in strings_list:
         
-        if string[0][bit]==string[1][bit]:
-            if string[0][bit]=='1':
-                qc.x(qr[bit])
-                
-        if string[0][bit]!=string[1][bit]:
-            diff.append(bit)
-    
-    if diff:
-        qc.h(qr[diff[0]])
-        for bit in diff[1:]:
-            qc.cx(qr[diff[0]],qr[bit])
-
-        for bit in diff:
-            if string[0][bit]=='1':
-                qc.x(qr[bit])
-    
-    qc.barrier(qr)
-    qc.measure(qr,cr)
+        # find the length of the longest string, and pad any that are shorter
+        num = 0
+        for string in strings:
+            num = max(len(string),num)
+        for string in strings:
+            string = '0'*(num-len(string)) + string
         
-    job = execute(qc, backend=get_backend(backend), shots=shots)
-    stats_raw = job.result().get_counts()
-    
-    stats = {}
-    for string in stats_raw:
-        stats[string[::-1]] = stats_raw[string]/shots
+        qr = QuantumRegister(num)
+        cr = ClassicalRegister(num)
+        qc = QuantumCircuit(qr,cr)
 
-    return stats
+        if len(strings)==2**num:
+            for n in range(num):
+                qc.h(qr[n])
+        else:
+            diff = []
+            for bit in range(num):
+                if strings[0][bit]==strings[1][bit]:
+                    if strings[0][bit]=='1':
+                        qc.x(qr[bit])
+                if strings[0][bit]!=strings[1][bit]:
+                    diff.append(bit)
+            if diff:
+                qc.h(qr[diff[0]])
+                for bit in diff[1:]:
+                    qc.cx(qr[diff[0]],qr[bit])
+                for bit in diff:
+                    if strings[0][bit]=='1':
+                        qc.x(qr[bit])
+
+        qc.barrier(qr)
+        qc.measure(qr,cr)
+        
+        batch.append(qc)
+
+    job = execute(batch, backend=get_backend(backend), shots=shots)
+    
+    stats_raw_list = []
+    for j in range(len(strings_list)):
+        stats_raw_list.append( job.result().get_counts(batch[j]) )
+
+    stats_list = []
+    for stats_raw in stats_raw_list:
+        stats = {}
+        for string in stats_raw:
+            stats[string[::-1]] = stats_raw[string]/shots
+        stats_list.append(stats)
+    
+    # if only one instance was given, output dict rather than list with a single dict
+    if len(stats_list)==1:
+        stats_list = stats_list[0]
+
+    return stats_list
     
 def emoticon_superposer (emoticons,backend='local_qasm_simulator',shots=1024,figsize=(20,20)):
     """Creates superposition of two emoticons.
@@ -202,36 +228,59 @@ def emoticon_superposer (emoticons,backend='local_qasm_simulator',shots=1024,fig
     emoticons = A list of two strings, each of which is composed of two ascii characters, such as [ ";)" , "8)" ].
     backend = A string specifying a backend. The noisy behaviour from a real device will result in emoticons other than the two supplied occuring with non-zero strength.
     shots = Number of times the process is repeated to calculate the fractions used as strengths. For shots=1, only a single randomnly generated emoticon is return (as the key of the dict)."""
-    string = []
-    for emoticon in emoticons:
-        bin4emoticon = ""
-        for character in emoticon:
-            bin4char = bin(ord(character))[2:]
-            bin4char = (8-len(bin4char))*'0'+bin4char
-            bin4emoticon += bin4char
-        string.append(bin4emoticon)
+    
+    # make it so that the input is a list of list of strings, even if it was just a list of strings
+    if type(emoticons[0])==str:
+        emoticons_list = [emoticons]
+    else:
+        emoticons_list = emoticons
         
-    stats = bitstring_superposer(string,backend=backend,shots=shots)
+    strings = []
+    for emoticons in emoticons_list:
+        string = []
+        for emoticon in emoticons:
+            bin4emoticon = ""
+            for character in emoticon:
+                bin4char = bin(ord(character))[2:]
+                bin4char = (8-len(bin4char))*'0'+bin4char
+                bin4emoticon += bin4char
+            string.append(bin4emoticon)
+        strings.append(string)
+        
+    stats = bitstring_superposer(strings,backend=backend,shots=shots)
     
-    fig = plt.figure()
-    ax=fig.add_subplot(111)
-    plt.rc('font', family='monospace')
-    ascii_stats = {}
-    for string in stats:
-        char = chr(int( string[0:8] ,2)) # get string of the leftmost 8 bits and convert to an ASCII character
-        char += chr(int( string[8:16] ,2)) # do the same for string of rightmost 8 bits, and add it to the previous character
-        prob = stats[string] # fraction of shots for which this result occurred
-        ascii_stats[char] = prob
-        # create plot with all characters on top of each other with alpha given by how often it turned up in the output
-        try:
-            plt.annotate( char, (0.5,0.5), va="center", ha="center", color = (0,0,0, prob ), size = 300)
-        except:
-            pass
-            
-    plt.axis('off')
-    plt.show()
+    # make a list of dicts from stats
+    if type(stats) is dict:
+        stats_list = [stats]
+    else:
+        stats_list = stats
+        
+    ascii_stats_list = []
+    for stats in stats_list:
+        fig = plt.figure()
+        ax=fig.add_subplot(111)
+        plt.rc('font', family='monospace')
+        ascii_stats = {}
+        for string in stats:
+            char = chr(int( string[0:8] ,2)) # get string of the leftmost 8 bits and convert to an ASCII character
+            char += chr(int( string[8:16] ,2)) # do the same for string of rightmost 8 bits, and add it to the previous character
+            prob = stats[string] # fraction of shots for which this result occurred
+            ascii_stats[char] = prob
+            # create plot with all characters on top of each other with alpha given by how often it turned up in the output
+            try:
+                plt.annotate( char, (0.5,0.5), va="center", ha="center", color = (0,0,0, prob ), size = 300)
+            except:
+                pass
+        ascii_stats_list.append(ascii_stats)
+
+        plt.axis('off')
+        plt.show()
     
-    return ascii_stats
+    # if only one instance was given, output dict rather than list with a single dict
+    if len(ascii_stats_list)==1:
+        ascii_stats_list = ascii_stats_list[0]
+    
+    return ascii_stats_list
 
 
 def image_superposer (all_images,images,backend='local_qasm_simulator',shots=1024,figsize=(20,20)):
@@ -247,69 +296,81 @@ def image_superposer (all_images,images,backend='local_qasm_simulator',shots=102
     bit_num = int(np.ceil( np.log2(image_num) ))
     all_images += [None]*(2**bit_num-image_num)
     
-    if images==all_images:
-        qr = QuantumRegister(bit_num)
-        cr = ClassicalRegister(bit_num)
-        qc = QuantumCircuit(qr,cr)
-        for n in range(bit_num):
-            qc.h(qr[n])
-        qc.barrier(qr)
-        qc.measure(qr,cr)
-        job = execute(qc, backend=get_backend(backend), shots=shots)
-        stats_raw = job.result().get_counts()
-        full_stats = {}
-        for string in stats_raw:
-            full_stats[string[::-1]] = stats_raw[string]/shots  
+    # make it so that the input is a list of list of strings, even if it was just a list of strings
+    if type(images[0])==str:
+        images_list = [images]
     else:
-        strings = []
-        for j in range(2):
-            string = "{0:b}".format(all_images.index(images[j]))
-            string = '0'*(bit_num-len(string)) + string
-            strings.append( string )
-        full_stats = bitstring_superposer(strings,backend=backend,shots=shots)
+        images_list = images
+    
+    strings = []
+    for images in images_list:
+        string = []
+        for image in images:
+            bin4pic = "{0:b}".format(all_images.index(image))
+            bin4pic = '0'*(bit_num-len(bin4pic)) + bin4pic
+            string.append( bin4pic )
+        strings.append(string)
+    
+    full_stats = bitstring_superposer(strings,backend=backend,shots=shots)
         
-    Z = 0
-    for j in range(image_num):
-        string = "{0:b}".format(j)
-        string = '0'*(bit_num-len(string)) + string
-        if string in full_stats:
-            Z += full_stats[string]    
-    stats = {}
-    for j in range(image_num):
-        string = "{0:b}".format(j)
-        string = '0'*(bit_num-len(string)) + string
-        if string in full_stats:
-            stats[string] = full_stats[string]/Z
+    # make a list of dicts from stats
+    if type(full_stats) is dict:
+        full_stats_list = [full_stats]
+    else:
+        full_stats_list = full_stats
+    
+    stats_list = []
+    for full_stats in full_stats_list:
+        Z = 0
+        for j in range(image_num):
+            string = "{0:b}".format(j)
+            string = '0'*(bit_num-len(string)) + string
+            if string in full_stats:
+                Z += full_stats[string]    
+        stats = {}
+        for j in range(image_num):
+            string = "{0:b}".format(j)
+            string = '0'*(bit_num-len(string)) + string
+            if string in full_stats:
+                stats[string] = full_stats[string]/Z
+        stats_list.append(stats)
             
-    # sort from least to most likely and create corresponding lists of the strings and fractions
-    sorted_strings = sorted(stats,key=stats.get)
-    sorted_fracs = sorted(stats.values())
-    n = len(stats)
-    # construct alpha values such that the final image is a weighted average of the images specified by the keys of `stats`
-    alpha = [ sorted_fracs[0] ]
-    for j in range(0,n-1):
-        alpha.append( ( alpha[j]/(1-alpha[j]) ) * ( sorted_fracs[j+1] / sorted_fracs[j] ) )
+        # sort from least to most likely and create corresponding lists of the strings and fractions
+        sorted_strings = sorted(stats,key=stats.get)
+        sorted_fracs = sorted(stats.values())
+        n = len(stats)
+        # construct alpha values such that the final image is a weighted average of the images specified by the keys of `stats`
+        alpha = [ sorted_fracs[0] ]
+        for j in range(0,n-1):
+            alpha.append( ( alpha[j]/(1-alpha[j]) ) * ( sorted_fracs[j+1] / sorted_fracs[j] ) )
+
+        fig, ax = plt.subplots(figsize=figsize)
+        for j in reversed(range(n)):
+            filename = all_images[int(sorted_strings[j],2)]
+            if filename:
+                image = plt.imread("images/"+filename+".png")
+                plt.imshow(image,alpha=alpha[j])
+        plt.axis('off')
+        plt.show()
     
-    fig, ax = plt.subplots(figsize=figsize)
-    for j in reversed(range(n)):
-        filename = all_images[int(sorted_strings[j],2)]
-        if filename:
-            image = plt.imread("images/"+filename+".png")
-            plt.imshow(image,alpha=alpha[j])
-    plt.axis('off')
-    plt.show()
+    image_stats_list = []
+    for stats in stats_list:
+        image_stats = {}
+        for string in stats:
+            image_stats[ all_images[int(string,2)] ] = stats[string]
+        image_stats_list.append(image_stats)
     
-    image_stats = {}
-    for string in stats:
-        image_stats[ all_images[int(string,2)] ] = stats[string]
+    # if only one instance was given, output dict rather than list with a single dict
+    if len(image_stats_list)==1:
+        image_stats_list = image_stats_list[0]
     
-    return image_stats
+    return image_stats_list
 
 
 class layout:
     
     def __init__(self,device):
-                
+
         if device in ['ibmqx2', 'ibmqx4', 'ibmqx5']:
                         
             backend = get_backend(device)
