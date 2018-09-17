@@ -223,7 +223,7 @@ def bitstring_superposer (strings,backend='local_qasm_simulator',shots=1024):
 def emoticon_superposer (emoticons,backend='local_qasm_simulator',shots=1024,figsize=(20,20)):
     """Creates superposition of two emoticons.
     
-    A dictionary is returned, which supplies the relative strength of each pair of ascii characters in the superposition. An image representing the superposition, with each pair of ascii characters appearing with an weight that represents their strength in the superposition, is also created and saved.
+    A dictionary is returned, which supplies the relative strength of each pair of ascii characters in the superposition. An image representing the superposition, with each pair of ascii characters appearing with an weight that represents their strength in the superposition, is also created.
     
     emoticons = A list of two strings, each of which is composed of two ascii characters, such as [ ";)" , "8)" ].
     backend = A string specifying a backend. The noisy behaviour from a real device will result in emoticons other than the two supplied occuring with non-zero strength.
@@ -286,7 +286,7 @@ def emoticon_superposer (emoticons,backend='local_qasm_simulator',shots=1024,fig
 def image_superposer (all_images,images,backend='local_qasm_simulator',shots=1024,figsize=(20,20)):
     """Creates superposition of two images from a set of images.
     
-    A dictionary is returned, which supplies the relative strength of each pair of ascii characters in the superposition. An image representing the superposition, with each of the original aimages appearing with an weight that represents their strength in the superposition, is also created and saved.
+    A dictionary is returned, which supplies the relative strength of each pair of ascii characters in the superposition. An image representing the superposition, with each of the original images appearing with an weight that represents their strength in the superposition, is also created.
     
     all_images = List of strings that are filenames for a set of images.  The files should be located in 'images/<filename>.png.
     images = List of strings for image files to be superposed. This can either contain the strings for two files, or for all in all_images. Other options are not currently supported.
@@ -368,9 +368,19 @@ def image_superposer (all_images,images,backend='local_qasm_simulator',shots=102
 
 
 class layout:
+    """Processing and display of data in ways that depend on the layout of a quantum device."""
     
     def __init__(self,device):
-
+        """Given a device, specified by
+        
+        device = A string specifying a device, or a list of two integers to define a grid.
+        
+        the following properties are determined.
+        
+        num = Number of qubits on the device.
+        pairs = Dictionary detailing the pairs of qubits for which cnot gates can be directly implemented. Each value is a list of two qubits for which this is possible. The corresponding key is a string that is used as the name of the pair.
+        pos = A dictionary of positions for qubits, to be used in plots.
+        """
         if device in ['ibmqx2', 'ibmqx4', 'ibmqx5']:
                         
             backend = get_backend(device)
@@ -419,7 +429,7 @@ class layout:
             self.pos[pair] = [(self.pos[self.pairs[pair][0]][j] + self.pos[self.pairs[pair][1]][j])/2 for j in range(2)]
   
     def calculate_probs(self,raw_stats):
-        
+        """Given a counts dictionary as the input `raw_stats`, a dictionary of probabilities is returned. The keys for these are either integers (referring to qubits) or strings (referring to pairs of neighbouring qubits). For the qubit entries, the corresponding value is the probability that the qubit is in state `1`. For the pair entries, the values are the probabilities that the two qubits disagree (so either the outcome `01` or `10`."""
         Z = 0
         for string in raw_stats:
             Z += raw_stats[string]
@@ -442,7 +452,13 @@ class layout:
         return probs
                     
     def plot(self,probs={},labels={},colors={},sizes={}):
-                        
+        """An image representing the device is created and displayed.
+        
+        When no kwargs are supplied, qubits are labelled according to their numbers. The pairs of qubits for which a cnot is possible are shown by lines connecting the qubitsm, and are labelled with letters.
+        
+        The kwargs should all be supplied in the form of dictionaries for which qubit numbers and pair labels are the keys (i.e., the same keys as for the `pos` attribute).
+        
+        If `probs` is supplied (such as from the output of the `calculate_probs()` method, the labels, colors and sizes of qubits and pairs will be determined by these probabilities. Otherwise, the other kwargs set these properties directly."""                
         G=nx.Graph()
         
         for pair in self.pairs:
@@ -530,11 +546,19 @@ class layout:
         plt.show() 
         
 
-
-
-
-
-
+def pauli_grid( rho, show_Y=False, hide=None ):
+    
+    # set up grid
+    if show_Y:
+        pass
+    else:
+        pass
+    
+    # add bars
+    if show_Y:
+        pass
+    else:
+        pass
 
 
 
