@@ -9,6 +9,7 @@ except:
 import numpy as np
 import random
 import matplotlib.pyplot as plt
+from matplotlib.patches import Circle, Rectangle
 import os
 import copy
 import networkx as nx
@@ -545,156 +546,160 @@ class layout:
                 font_color ='w', font_size = 18)
         plt.show() 
         
+class pauli_grid:
 
-def pauli_grid( rho, show_Y=False, hide=None ):
-    
-    # set up grid
-    if show_Y:
-        pass
-    else:
-        pass
-    
-    # add bars
-    if show_Y:
-        pass
-    else:
-        pass
-
-
-
-
-class walker:
-    """Work in progress"""
-    def __init__(self,length,device,start=None,samples=1,backend='local_qasm_simulator',shots=1024,method='run'):
-        
-        self.length = length
-        self.start = start
-        self.samples = samples
-        self.backend = backend
-        self.shots = shots
-        self.method = method
-        
-        # device can be a string specifying a device or a tuble specifying a grid
-        if isinstance( device, str ):
-            backend = get_backend(device)
-            self.num = backend.configuration['n_qubits']
-            coupling_array = backend.configuration['coupling_map']
-            self.coupling = {}
-            for n in range(self.num):
-                self.coupling[n] = []
-            for pair in coupling_array:
-                for j in range(2):
-                    self.coupling[pair[j]].append(pair[(j+1)%2])
-                    self.coupling[pair[(j+1)%2]].append(pair[j])
-        else:
-            Lx = device[0]
-            Ly = device[1]
-            self.num = Lx*Ly
-            self.coupling = {}
-            for n in range(self.num):
-                self.coupling[n] = []
-            for x in range(Lx-1):
-                for y in range(Ly):
-                    n = x + y*Ly
-                    m = n+1
-                    self.coupling[n].append(m)
-                    self.coupling[m].append(n)
-            for x in range(Lx):
-                for y in range(Ly-1):
-                    n = x + y*Ly
-                    m = n+Ly
-                    self.coupling[n].append(m)
-                    self.coupling[m].append(n)
-         
-        if method=='run':
-            self.starts, self.walks = self.setup_walks()
-        else:
-            self.walks = None
-        
-        self.starts,self.stats = self.get_data()
-        
-            
-    def setup_walks(self):
-        
-        walks = []
-        starts = []
-        for sample in range(self.samples):
-            
-            if not self.start:
-                start = random.choice( range(self.num) )
-            else:
-                start = self.start
-            starts.append(start)
-            
-            walk = [start]
-            for l in range(self.length):
-                neighbours = list( set(self.coupling[walk[-1]]) - set(walk) )
-                if neighbours:
-                    walk.append( random.choice( neighbours ) )
-                else:
-                    walk.append( random.choice( self.coupling[ walk[-1] ] ) )
-            walks.append(walk)
-            
-        return starts, walks
-    
-    
-    def get_data(self):
-        
-        if self.method=='run':
-            batch = []
-            for sample in range(self.samples):
-                for steps in range(1,self.length+1):
-
-                    qr = QuantumRegister(self.num)
-                    cr = ClassicalRegister(self.num)
-                    qc = QuantumCircuit(qr,cr)
-                    
-                    qc.h(qr[self.walks[sample][0]])
-
-                    for step in range(1,steps):
-                        n = self.walks[sample][step-1]
-                        m = self.walks[sample][step]
-                        qc.cx(qr[n],qr[m])
-                        qc.h(qr[m])
-
-                    qc.barrier(qr)
-                    qc.measure(qr,cr)
+    def __init__(self,rho):
                 
-                    batch.append(qc)
-                    
-            job = execute(batch, backend=get_backend(self.backend), shots=self.shots)
-            
-            probs = []
-            j = 0
-            for sample in range(self.samples):
-                probs_for_sample = []
-                for step in range(self.length):
-                    stats = job.result().get_counts(batch[j])
-                    prob = [0]*self.num
-                    for string in stats:
-                        for n in range(self.num):
-                            if string[n]=='1':
-                                prob[n] += stats[string]/self.shots
-                    probs_for_sample.append( prob )
-                    j += 1
-                probs.append(probs_for_sample)
-               
-            starts = self.starts
-            
-            saveFile = open('results.txt', 'w')
-            saveFile.write( str(probs) )
-            saveFile.write( str(starts) )
-            saveFile.close()
+        self.box = {'ZI':(-1, 2),'XI':(-2, 3),'IZ':( 1, 2),'IX':( 2, 3),'ZZ':( 0, 3),'ZX':( 1, 4),'XZ':(-1, 4),'XX':( 0, 5)}
         
+        self.rho = {}
+        for pauli in self.box:
+            self.rho[pauli] = 0.0
+        for pauli in ['ZI','IZ','ZZ']:
+            self.rho[pauli] = 1.0
+            
+        self.qr = QuantumRegister(2)
+        self.cr = ClassicalRegister(2)
+        self.qc = QuantumCircuit(self.qr, self.cr)
+    
+    def get_rho(self,backend='local_qasm_simulator',shots=1024):
+        
+        bases = ['ZZ','ZX','XZ','XX']
+        results = {}
+        for basis in bases:
+            temp_qc = copy.deepcopy(self.qc)
+            for j in range(2):
+                if basis[j]=='X':
+                    temp_qc.h(self.qr[j])
+            temp_qc.barrier(self.qr)
+            temp_qc.measure(self.qr,self.cr)
+            job = execute(temp_qc, backend=get_backend(backend), shots=shots)
+            results[basis] = job.result().get_counts()
+            for string in results[basis]:
+                results[basis][string] = results[basis][string]/shots
+          
+        prob = {}
+        # prob of expectation value -1 for single qubit observables
+        for j in range(2):
+            for p in ['X','Z']:
+                pauli = {}
+                for pp in 'IXZ':
+                    pauli[pp] = (j==1)*pp + p + (j==0)*pp
+                prob[pauli['I']] = 0
+                for basis in [pauli['X'],pauli['Z']]:
+                    for string in results[basis]:
+                        if string[(j+1)%2]=='1':
+                            prob[pauli['I']] += results[basis][string]/2
+        # prob of expectation value -1 for two qubit observables
+        for basis in ['ZZ','ZX','XZ','XX']:
+            prob[basis] = 0
+            for string in results[basis]:
+                if string[0]!=string[1]:
+                    prob[basis] += results[basis][string]
+
+        for pauli in prob:
+            self.rho[pauli] = 1-2*prob[pauli]
+
+    
+    def show_grid(self,rho=None,labels=False,bloch=None,hidden=[],mode='line',backend='local_qasm_simulator',shots=1024):
+        
+        l = 1 # line length
+        r = 0.6 # circle radius
+        L = 0.98*np.sqrt(2) # box height and width
+        
+        # colors are background, qubit circles and correlation circles, respectively
+        if mode=='line':
+            self.colors = [(0.9,0.9,0.9),(0.75,0.75,0.75),(0.5,0.5,0.5)]
         else:
-            
-            saveFile = open('results.txt')
-            saved_data = saveFile.readlines()
-            saveFile.close()
-            
-            probs_string = saved_data[0]
-            starts_string = saved_data[1]
-            probs = eval(probs_string)
-            starts = eval(starts_string)
-            
-        return starts,probs 
+            self.colors = [(0.8,0.9,0.9),(0.6,0.8,0.8),(0.3,0.7,0.7)]
+        
+        plt.rcParams['figure.facecolor'] = self.colors[0]
+        
+        if rho==None:
+            self.get_rho(backend='local_qasm_simulator',shots=1024)
+            rho = self.rho
+        else:
+            if type(rho)==list: # assume that it is a list of counts dicts and therefore requires conversion
+                rho = {}
+                for pauli in self.box:
+                    rho[pauli] = 1-2*random.random()  
+        
+        def add_line(line,pauli,expect):
+            # line = the type of line to be drawn (X, Z or the other one)
+            # pauli = the box where the line is to be drawn
+            # expect = the expectation value that determines its length
+            unhidden = True
+            for j in hidden:
+                unhidden = unhidden and pauli[j]=='I'
+            coord = None
+            if unhidden:
+                if line=='Z':
+                    a = ( self.box[pauli][0], self.box[pauli][1]+l/2 )
+                    b = ( self.box[pauli][0], self.box[pauli][1]-(-expect/2)*l )
+                    c = ( self.box[pauli][0], self.box[pauli][1]-l/2 )
+                    plt.plot( [a[0],b[0]], [a[1],b[1]], color=(0.0,0.0,1.0), lw=15 )
+                    plt.plot( [b[0],c[0]], [b[1],c[1]], color=(0.75,0.75,1.0), lw=15 )
+                    coord = b[1]
+                elif line=='X':
+                    a = ( self.box[pauli][0]+l/2, self.box[pauli][1] )
+                    b = ( self.box[pauli][0]-(-expect/2)*l, self.box[pauli][1] )
+                    c = ( self.box[pauli][0]-l/2, self.box[pauli][1] )
+                    plt.plot( [a[0],b[0]], [a[1],b[1]], color=(1.0,0.0,0.0), lw=15 )
+                    plt.plot( [b[0],c[0]], [b[1],c[1]], color=(1.0,0.75,0.75), lw=15 )
+                    coord = b[0]
+                else:
+                    a = ( self.box[pauli][0]+l/(2*np.sqrt(2)), self.box[pauli][1]+l/(2*np.sqrt(2)) )
+                    b = ( self.box[pauli][0]-(-expect/2)*l/(np.sqrt(2)), self.box[pauli][1]-(-expect/2)*l/(np.sqrt(2)) )
+                    c = ( self.box[pauli][0]-l/(2*np.sqrt(2)), self.box[pauli][1]-l/(2*np.sqrt(2)) )
+                    plt.plot( [a[0],b[0]], [a[1],b[1]], color=(0.0,0.8,0.0), lw=15 )
+                    plt.plot( [b[0],c[0]], [b[1],c[1]], color=(0.75,0.9,0.75), lw=15 )
+            return coord
+        
+        fig, ax = plt.subplots(figsize=[12,10])
+
+        # draw boxes
+        for pauli in self.box:
+            if 'I' in pauli:
+                color = self.colors[1]
+            else:
+                color = self.colors[2]
+            ax.add_patch( Rectangle( (self.box[pauli][0],self.box[pauli][1]-1), L, L, angle=45, color=color) )  
+
+        # draw circles
+        for pauli in self.box:
+            if mode=='line':
+                ax.add_patch( Circle(self.box[pauli], r, color=(0.95,0.95,0.95)) )
+            else:
+                prob = (1-rho[pauli])/2
+                ax.add_patch( Circle(self.box[pauli], r, color=(prob,prob,prob)) )
+
+        if mode=='line':
+            # add bars
+            if bloch in [0,1]:
+                for other in 'IXZ':
+                    px = other*(bloch==1) + 'X' + other*(bloch==0)
+                    pz = other*(bloch==1) + 'Z' + other*(bloch==0)
+                    z_coord = add_line('Z',pz,rho[pz])
+                    x_coord = add_line('X',pz,rho[px])
+                    ax.add_patch( Circle((x_coord,z_coord), 0.05, color='black', zorder=10) )
+                px = 'I'*(bloch==0) + 'X' + 'I'*(bloch==1)
+                pz = 'I'*(bloch==0) + 'Z' + 'I'*(bloch==1)
+                add_line('Z',pz,rho[pz])
+                add_line('X',px,rho[px])
+
+            else:
+                for pauli in self.box:
+                    if pauli in ['ZI','IZ','ZZ']:
+                        add_line('Z',pauli,rho[pauli])
+                    if pauli in ['XI','IX','XX']: 
+                        add_line('X',pauli,rho[pauli])
+                    if pauli in ['XZ','ZX']:
+                        add_line('ZX',pauli,rho[pauli])
+        
+        if labels:
+            for pauli in box:
+                plt.text(self.box[pauli][0]-0.05,self.box[pauli][1]-0.85, pauli)
+
+        plt.plot()
+        plt.axis('off')
+        plt.show()
