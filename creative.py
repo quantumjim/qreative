@@ -1,10 +1,7 @@
 # coding: utf-8
 
-try:
-    from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, get_backend, available_backends, execute
-    from qiskit import register
-except:
-    print("Warning: QISKit is not installed\n         This won't be a problem if you only run from existing data")
+from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, get_backend, available_backends, execute
+from qiskit import register
 
 import numpy as np
 import random
