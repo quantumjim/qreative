@@ -1,5 +1,8 @@
 # coding: utf-8
 
+# Aug 2018 version: Copyright © 2018 James Wootton, University of Basel
+# Later versions:   Copyright © 2018 IBM Research
+
 from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, get_backend, available_backends, execute
 from qiskit import register
 
