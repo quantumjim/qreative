@@ -3,8 +3,7 @@
 # Aug 2018 version: Copyright © 2018 James Wootton, University of Basel
 # Later versions:   Copyright © 2018 IBM Research
 
-from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, get_backend, available_backends, execute
-from qiskit import register
+from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, execute, Aer, IBMQ
 
 import numpy as np
 import random
@@ -15,17 +14,17 @@ import copy
 import networkx as nx
 
 try:
-    import sys
-    sys.path.append("../") # go to parent dir
-    import Qconfig
-    qx_config = {
-        "APItoken": Qconfig.APItoken,
-        "url": Qconfig.config['url']}
-    #set api
-    register(qx_config['APItoken'], qx_config['url'])
+    IBMQ.load_accounts()
 except Exception as e:
-    print("Warning: Credentials required for using remote IBMQ devices hae not been set up")
+    print("You'll need to set up an IBMQ account to access anything but local simulators. See\n    https://github.com/Qiskit/qiskit-tutorials/blob/master/INSTALL.md\nfor details on how to get an account and register the credentials.")
 
+def get_backend(device):
+    """Returns backend object for device specified by input string."""
+    try:
+        backend = Aer.get_backend(device)
+    except:
+        backend = IBMQ.get_backend(device)
+    return backend
     
 class ladder:
     """An integer implemented on a single qubit. Addition and subtraction are implemented via partial NOT gates."""
@@ -43,15 +42,15 @@ class ladder:
         delta = Amount by which to change the value of the ladder object. Can be int or float."""
         self.qc.rx(np.pi*delta/self.d,self.qr[0])
         
-    def value(self,backend='local_qasm_simulator',shots=1024):
+    def value(self,device='qasm_simulator',shots=1024):
         """Returns the current version of the ladder operator as an int. If floats have been added to this value, the sum of all floats added thus far are rounded.
         
-        backend = A string specifying a backend. The noisy behaviour from a real device will result in some randomness in the value given, and can lead to the reported value being less than the true value on average. These effects will be more evident for high `d`.
+        device = A string specifying a backend. The noisy behaviour from a real device will result in some randomness in the value given, and can lead to the reported value being less than the true value on average. These effects will be more evident for high `d`.
         shots = Number of shots used when extracting results from the qubit. A low value will result in randomness in the value given. This should be neglible when the value is a few orders of magnitude greater than `d`. """  
         temp_qc = copy.deepcopy(self.qc)
         temp_qc.barrier(self.qr)
         temp_qc.measure(self.qr,self.cr)
-        job = execute(temp_qc, backend=get_backend(backend), shots=shots)
+        job = execute(temp_qc, backend=get_backend(device), shots=shots)
         if '1' in job.result().get_counts():
             p = job.result().get_counts()['1']/shots
         else:
@@ -86,18 +85,18 @@ class twobit:
             if state['Z']:
                 self.qc.x(self.qr[0])
                 
-    def value (self,basis,backend='local_qasm_simulator',shots=1024,mitigate=True):
+    def value (self,basis,device='qasm_simulator',shots=1024,mitigate=True):
         """Extracts the boolean value for the given measurement type. The twobit is also reinitialized to ensure that the same value would if the same call to `measure()` was repeated.
         
         basis = 'X' or 'Z', specifying the desired measurement type.
-        backend = A string specifying a backend. The noisy behaviour from a real device will result in some randomness in the value given, even if it has been set to a definite value for a given measurement type. This effect can be reduced using `mitigate=True`.
+        device = A string specifying a backend. The noisy behaviour from a real device will result in some randomness in the value given, even if it has been set to a definite value for a given measurement type. This effect can be reduced using `mitigate=True`.
         shots = Number of shots used when extracting results from the qubit. A value of greater than 1 only has any effect for `mitigate=True`, in which case larger values of `shots` allow for better mitigation.
         mitigate = Boolean specifying whether mitigation should be applied. If so the values obtained over `shots` samples are considered, and the fraction which output `True` is calculated. If this is more than 90%, measure will return `True`. If less than 10%, it will return `False`, otherwise it returns a random value using the fraction as the probability."""
         if basis=='X':
             self.qc.h(self.qr[0])
         self.qc.barrier(self.qr)
         self.qc.measure(self.qr,self.cr)
-        job = execute(self.qc, backend=get_backend(backend), shots=shots)
+        job = execute(self.qc, backend=get_backend(device), shots=shots)
         stats = job.result().get_counts()
         if '1' in stats:
             p = stats['1']/shots
@@ -114,11 +113,11 @@ class twobit:
         return measured_value
 
         
-def bell_correlation (basis,backend='local_qasm_simulator',shots=1024):
+def bell_correlation (basis,device='qasm_simulator',shots=1024):
     """Prepares a rotated Bell state of two qubits. Measurement is done in the specified basis for each qubit. The fraction of results for which the two qubits agree is returned.
     
     basis = String specifying measurement bases. 'XX' denotes X measurement on each qubit, 'XZ' denotes X measurement on qubit 0 and Z on qubit 1, vice-versa for 'ZX', and 'ZZ' denotes 'Z' measurement on both.
-    backend = A string specifying a backend. The noisy behaviour from a real device will result in the correlations being less strong than in the ideal case.
+    device = A string specifying a backend. The noisy behaviour from a real device will result in the correlations being less strong than in the ideal case.
     shots = Number of shots used when extracting results from the qubit. For shots=1, the returned value will randomly be 0 (if the results for the two qubits disagree) or 1 (if they agree). For large shots, the returned value will be probability for this random process.
     """
     qr = QuantumRegister(2)
@@ -139,7 +138,7 @@ def bell_correlation (basis,backend='local_qasm_simulator',shots=1024):
     qc.barrier(qr)
     qc.measure(qr,cr)
     
-    job = execute(qc, backend=get_backend(backend), shots=shots)
+    job = execute(qc, backend=get_backend(device), shots=shots)
     stats = job.result().get_counts()
     
     P = 0
@@ -150,11 +149,11 @@ def bell_correlation (basis,backend='local_qasm_simulator',shots=1024):
             
     return P
 
-def bitstring_superposer (strings,backend='local_qasm_simulator',shots=1024):
+def bitstring_superposer (strings,device='qasm_simulator',shots=1024):
     """Prepares the superposition of the two given n bit strings. The number of qubits used is equal to the length of the string. The superposition is measured, and the process repeated many times. A dictionary with the fraction of shots for which each string occurred is returned.
     
     string = List of two binary strings. If the list has more than two elements, all but the first two are ignored.
-    backend = A string specifying a backend. The noisy behaviour from a real device will result in strings other than the two supplied occuring with non-zero fraction.
+    device = A string specifying a backend. The noisy behaviour from a real device will result in strings other than the two supplied occuring with non-zero fraction.
     shots = Number of times the process is repeated to calculate the fractions. For shots=1, only a single randomnly generated bit string is return (as the key of a dict)."""
     
     # make it so that the input is a list of list of strings, even if it was just a list of strings
@@ -202,7 +201,7 @@ def bitstring_superposer (strings,backend='local_qasm_simulator',shots=1024):
         
         batch.append(qc)
 
-    job = execute(batch, backend=get_backend(backend), shots=shots)
+    job = execute(batch, backend=get_backend(device), shots=shots)
     
     stats_raw_list = []
     for j in range(len(strings_list)):
@@ -221,13 +220,13 @@ def bitstring_superposer (strings,backend='local_qasm_simulator',shots=1024):
 
     return stats_list
     
-def emoticon_superposer (emoticons,backend='local_qasm_simulator',shots=1024,figsize=(20,20)):
+def emoticon_superposer (emoticons,device='qasm_simulator',shots=1024,figsize=(20,20)):
     """Creates superposition of two emoticons.
     
     A dictionary is returned, which supplies the relative strength of each pair of ascii characters in the superposition. An image representing the superposition, with each pair of ascii characters appearing with an weight that represents their strength in the superposition, is also created.
     
     emoticons = A list of two strings, each of which is composed of two ascii characters, such as [ ";)" , "8)" ].
-    backend = A string specifying a backend. The noisy behaviour from a real device will result in emoticons other than the two supplied occuring with non-zero strength.
+    device = A string specifying a backend. The noisy behaviour from a real device will result in emoticons other than the two supplied occuring with non-zero strength.
     shots = Number of times the process is repeated to calculate the fractions used as strengths. For shots=1, only a single randomnly generated emoticon is return (as the key of the dict)."""
     
     # make it so that the input is a list of list of strings, even if it was just a list of strings
@@ -248,7 +247,7 @@ def emoticon_superposer (emoticons,backend='local_qasm_simulator',shots=1024,fig
             string.append(bin4emoticon)
         strings.append(string)
         
-    stats = bitstring_superposer(strings,backend=backend,shots=shots)
+    stats = bitstring_superposer(strings,backend=get_backend(device),shots=shots)
     
     # make a list of dicts from stats
     if type(stats) is dict:
@@ -284,14 +283,14 @@ def emoticon_superposer (emoticons,backend='local_qasm_simulator',shots=1024,fig
     return ascii_stats_list
 
 
-def image_superposer (all_images,images,backend='local_qasm_simulator',shots=1024,figsize=(20,20)):
+def image_superposer (all_images,images,device='qasm_simulator',shots=1024,figsize=(20,20)):
     """Creates superposition of two images from a set of images.
     
     A dictionary is returned, which supplies the relative strength of each pair of ascii characters in the superposition. An image representing the superposition, with each of the original images appearing with an weight that represents their strength in the superposition, is also created.
     
     all_images = List of strings that are filenames for a set of images.  The files should be located in 'images/<filename>.png.
     images = List of strings for image files to be superposed. This can either contain the strings for two files, or for all in all_images. Other options are not currently supported.
-    backend = A string specifying a backend. The noisy behaviour from a real device will result in images other than those intended appearing with non-zero strength.
+    device = A string specifying a backend. The noisy behaviour from a real device will result in images other than those intended appearing with non-zero strength.
     shots = Number of times the process is repeated to calculate the fractions used as strengths. For shots=1, only a single randomnly generated emoticon is return (as the key of the dict)."""
     image_num = len(all_images)
     bit_num = int(np.ceil( np.log2(image_num) ))
@@ -312,7 +311,7 @@ def image_superposer (all_images,images,backend='local_qasm_simulator',shots=102
             string.append( bin4pic )
         strings.append(string)
     
-    full_stats = bitstring_superposer(strings,backend=backend,shots=shots)
+    full_stats = bitstring_superposer(strings,backend=get_backend(device),shots=shots)
         
     # make a list of dicts from stats
     if type(full_stats) is dict:
@@ -546,11 +545,30 @@ class layout:
                 font_color ='w', font_size = 18)
         plt.show() 
         
-class pauli_grid:
+class pauli_grid():
+    # Allows a quantum circuit to be created, modified and implemented, and visualizes the output in the style of 'Hello Quantum'.
 
-    def __init__(self,rho):
-                
-        self.box = {'ZI':(-1, 2),'XI':(-2, 3),'IZ':( 1, 2),'IX':( 2, 3),'ZZ':( 0, 3),'ZX':( 1, 4),'XZ':(-1, 4),'XX':( 0, 5)}
+    def __init__(self,device='qasm_simulator',shots=1024,mode='circle',y_boxes=False):
+        """
+        device='qasm_simulator'
+            Backend to be used by Qiskit to calculate expectation values (defaults to local simulator).
+        shots=1024
+            Number of shots used to to calculate expectation values.
+        mode='circle'
+            Either the standard 'Hello Quantum' visualization can be used (with mode='circle') or the alternative line based one (mode='line').
+        y_boxes=True
+            Whether to display full grid that includes Y expectation values.
+        """
+        
+        self.backend = get_backend(device)
+        self.shots = shots
+        
+        self.y_boxes = y_boxes
+        if self.y_boxes:
+            self.box = {'ZI':(-1, 2),'XI':(-3, 4),'IZ':( 1, 2),'IX':( 3, 4),'ZZ':( 0, 3),'ZX':( 2, 5),'XZ':(-2, 5),'XX':( 0, 7),
+                        'YY':(0,5), 'YI':(-2,3), 'IY':(2,3), 'YZ':(-1,4), 'ZY':(1,4), 'YX':(1,6), 'XY':(-1,6) }
+        else:
+            self.box = {'ZI':(-1, 2),'XI':(-2, 3),'IZ':( 1, 2),'IX':( 2, 3),'ZZ':( 0, 3),'ZX':( 1, 4),'XZ':(-1, 4),'XX':( 0, 5)}
         
         self.rho = {}
         for pauli in self.box:
@@ -561,37 +579,73 @@ class pauli_grid:
         self.qr = QuantumRegister(2)
         self.cr = ClassicalRegister(2)
         self.qc = QuantumCircuit(self.qr, self.cr)
-    
-    def get_rho(self,backend='local_qasm_simulator',shots=1024):
         
-        bases = ['ZZ','ZX','XZ','XX']
+        self.mode = mode
+        # colors are background, qubit circles and correlation circles, respectively
+        if self.mode=='line':
+            self.colors = [(1.6/255,72/255,138/255),(132/255,177/255,236/255),(33/255,114/255,216/255)]
+        else:
+            self.colors = [(1.6/255,72/255,138/255),(132/255,177/255,236/255),(33/255,114/255,216/255)]
+        
+        self.fig = plt.figure(figsize=(5,5),facecolor=self.colors[0])
+        self.ax = self.fig.add_subplot(111)
+        plt.axis('off')
+        
+        self.bottom = self.ax.text(-3,1,"",size=9,va='top',color='w')
+        
+        self.lines = {}
+        for pauli in self.box:
+            w = plt.plot( [self.box[pauli][0],self.box[pauli][0]], [self.box[pauli][1],self.box[pauli][1]], color=(1.0,1.0,1.0), lw=0 )
+            b = plt.plot( [self.box[pauli][0],self.box[pauli][0]], [self.box[pauli][1],self.box[pauli][1]], color=(0.0,0.0,0.0), lw=0 )
+            c = {}
+            c['w'] = self.ax.add_patch( Circle(self.box[pauli], 0.0, color=(0,0,0), zorder=10) )
+            c['b'] = self.ax.add_patch( Circle(self.box[pauli], 0.0, color=(1,1,1), zorder=10) )
+            self.lines[pauli] = {'w':w,'b':b,'c':c}
+                         
+    
+    def get_rho(self):
+        # Runs the circuit specified by self.qc and determines the expectation values for 'ZI', 'IZ', 'ZZ', 'XI', 'IX', 'XX', 'ZX' and 'XZ' (and the ones with Ys too if needed).
+        
+        if self.y_boxes:
+            corr = ['ZZ','ZX','XZ','XX','YY','YX','YZ','XY','ZY']
+            ps = ['X','Y','Z']
+        else:
+            corr = ['ZZ','ZX','XZ','XX']
+            ps = ['X','Z']
+        
         results = {}
-        for basis in bases:
+        for basis in corr:
             temp_qc = copy.deepcopy(self.qc)
             for j in range(2):
                 if basis[j]=='X':
                     temp_qc.h(self.qr[j])
+                elif basis[j]=='Y':
+                    temp_qc.sdg(self.qr[j])
+                    temp_qc.h(self.qr[j])
             temp_qc.barrier(self.qr)
             temp_qc.measure(self.qr,self.cr)
-            job = execute(temp_qc, backend=get_backend(backend), shots=shots)
+            job = execute(temp_qc, backend=self.backend, shots=self.shots)
             results[basis] = job.result().get_counts()
             for string in results[basis]:
-                results[basis][string] = results[basis][string]/shots
-          
+                results[basis][string] = results[basis][string]/self.shots
+
         prob = {}
         # prob of expectation value -1 for single qubit observables
         for j in range(2):
-            for p in ['X','Z']:
+            
+            for p in ps:
                 pauli = {}
-                for pp in 'IXZ':
+                for pp in ['I']+ps:
                     pauli[pp] = (j==1)*pp + p + (j==0)*pp
                 prob[pauli['I']] = 0
-                for basis in [pauli['X'],pauli['Z']]:
+                for ppp in ps:
+                    basis = pauli[ppp]
                     for string in results[basis]:
                         if string[(j+1)%2]=='1':
-                            prob[pauli['I']] += results[basis][string]/2
+                            prob[pauli['I']] += results[basis][string]/(2+self.y_boxes)
+        
         # prob of expectation value -1 for two qubit observables
-        for basis in ['ZZ','ZX','XZ','XX']:
+        for basis in corr:
             prob[basis] = 0
             for string in results[basis]:
                 if string[0]!=string[1]:
@@ -599,63 +653,84 @@ class pauli_grid:
 
         for pauli in prob:
             self.rho[pauli] = 1-2*prob[pauli]
-
     
-    def show_grid(self,rho=None,labels=False,bloch=None,hidden=[],mode='line',backend='local_qasm_simulator',shots=1024):
+    def update_grid(self,rho=None,labels=False,bloch=None,hidden=[],qubit=True,corr=True,message=""):
+        """
+        rho = None
+            Dictionary of expectation values for 'ZI', 'IZ', 'ZZ', 'XI', 'IX', 'XX', 'ZX' and 'XZ'. If supplied, this will be visualized instead of the results of running self.qc.
+        labels = None
+            Dictionary of strings for 'ZI', 'IZ', 'ZZ', 'XI', 'IX', 'XX', 'ZX' and 'XZ' that are printed in the corresponding boxes.
+        bloch = None
+            If a qubit name is supplied, and if mode='line', Bloch circles are displayed for this qubit
+        hidden = []
+            Which qubits have their circles hidden (empty list if both shown).
+        qubit = True
+            Whether both circles shown for each qubit (use True for qubit puzzles and False for bit puzzles).
+        corr = True
+            Whether the correlation circles (the four in the middle) are shown.
+        message
+            A string of text that is displayed below the grid.
+        """
+
+        def see_if_unhidden(pauli):
+            # For a given Pauli, see whether its circle should be shown.
+            
+            unhidden = True
+            # first: does it act non-trivially on a qubit in `hidden`
+            for j in hidden:
+                unhidden = unhidden and (pauli[j]=='I')
+            # second: does it contain something other than 'I' or 'Z' when only bits are shown
+            if qubit==False:
+                for j in range(2):
+                    unhidden = unhidden and (pauli[j] in ['I','Z'])
+            # third: is it a correlation pauli when these are not allowed
+            if corr==False:
+                unhidden = unhidden and ((pauli[0]=='I') or (pauli[1]=='I'))
+            return unhidden
+
+        def add_line(line,pauli_pos,pauli):
+            """
+            For mode='line', add in the line.
+            
+            line = the type of line to be drawn (X, Z or the other one)
+            pauli = the box where the line is to be drawn
+            expect = the expectation value that determines its length
+            """
+            
+            unhidden = see_if_unhidden(pauli)
+            coord = None
+            p = (1-self.rho[pauli])/2 # prob of 1 output
+            # in the following, white lines goes from a to b, and black from b to c
+            if unhidden:
+                if line=='Z':
+                    a = ( self.box[pauli_pos][0], self.box[pauli_pos][1]+l/2 )
+                    c = ( self.box[pauli_pos][0], self.box[pauli_pos][1]-l/2 )
+                    b = ( (1-p)*a[0] + p*c[0] , (1-p)*a[1] + p*c[1] )
+                    lw = 8
+                    coord = (b[1] - (a[1]+c[1])/2)*1.2 + (a[1]+c[1])/2
+                elif line=='X':
+                    a = ( self.box[pauli_pos][0]+l/2, self.box[pauli_pos][1] )
+                    c = ( self.box[pauli_pos][0]-l/2, self.box[pauli_pos][1] )
+                    b = ( (1-p)*a[0] + p*c[0] , (1-p)*a[1] + p*c[1] )
+                    lw = 9
+                    coord = (b[0] - (a[0]+c[0])/2)*1.1 + (a[0]+c[0])/2
+                else:
+                    a = ( self.box[pauli_pos][0]+l/(2*np.sqrt(2)), self.box[pauli_pos][1]+l/(2*np.sqrt(2)) )
+                    c = ( self.box[pauli_pos][0]-l/(2*np.sqrt(2)), self.box[pauli_pos][1]-l/(2*np.sqrt(2)) )
+                    b = ( (1-p)*a[0] + p*c[0] , (1-p)*a[1] + p*c[1] )
+                    lw = 9
+                self.lines[pauli]['w'].pop(0).remove()
+                self.lines[pauli]['b'].pop(0).remove()
+                self.lines[pauli]['w'] = plt.plot( [a[0],b[0]], [a[1],b[1]], color=(1.0,1.0,1.0), lw=lw )
+                self.lines[pauli]['b'] = plt.plot( [b[0],c[0]], [b[1],c[1]], color=(0.0,0.0,0.0), lw=lw )
+                return coord
         
-        l = 1 # line length
+        l = 0.9 # line length
         r = 0.6 # circle radius
         L = 0.98*np.sqrt(2) # box height and width
         
-        # colors are background, qubit circles and correlation circles, respectively
-        if mode=='line':
-            self.colors = [(0.9,0.9,0.9),(0.75,0.75,0.75),(0.5,0.5,0.5)]
-        else:
-            self.colors = [(0.8,0.9,0.9),(0.6,0.8,0.8),(0.3,0.7,0.7)]
-        
-        plt.rcParams['figure.facecolor'] = self.colors[0]
-        
         if rho==None:
-            self.get_rho(backend='local_qasm_simulator',shots=1024)
-            rho = self.rho
-        else:
-            if type(rho)==list: # assume that it is a list of counts dicts and therefore requires conversion
-                rho = {}
-                for pauli in self.box:
-                    rho[pauli] = 1-2*random.random()  
-        
-        def add_line(line,pauli,expect):
-            # line = the type of line to be drawn (X, Z or the other one)
-            # pauli = the box where the line is to be drawn
-            # expect = the expectation value that determines its length
-            unhidden = True
-            for j in hidden:
-                unhidden = unhidden and pauli[j]=='I'
-            coord = None
-            if unhidden:
-                if line=='Z':
-                    a = ( self.box[pauli][0], self.box[pauli][1]+l/2 )
-                    b = ( self.box[pauli][0], self.box[pauli][1]-(-expect/2)*l )
-                    c = ( self.box[pauli][0], self.box[pauli][1]-l/2 )
-                    plt.plot( [a[0],b[0]], [a[1],b[1]], color=(0.0,0.0,1.0), lw=15 )
-                    plt.plot( [b[0],c[0]], [b[1],c[1]], color=(0.75,0.75,1.0), lw=15 )
-                    coord = b[1]
-                elif line=='X':
-                    a = ( self.box[pauli][0]+l/2, self.box[pauli][1] )
-                    b = ( self.box[pauli][0]-(-expect/2)*l, self.box[pauli][1] )
-                    c = ( self.box[pauli][0]-l/2, self.box[pauli][1] )
-                    plt.plot( [a[0],b[0]], [a[1],b[1]], color=(1.0,0.0,0.0), lw=15 )
-                    plt.plot( [b[0],c[0]], [b[1],c[1]], color=(1.0,0.75,0.75), lw=15 )
-                    coord = b[0]
-                else:
-                    a = ( self.box[pauli][0]+l/(2*np.sqrt(2)), self.box[pauli][1]+l/(2*np.sqrt(2)) )
-                    b = ( self.box[pauli][0]-(-expect/2)*l/(np.sqrt(2)), self.box[pauli][1]-(-expect/2)*l/(np.sqrt(2)) )
-                    c = ( self.box[pauli][0]-l/(2*np.sqrt(2)), self.box[pauli][1]-l/(2*np.sqrt(2)) )
-                    plt.plot( [a[0],b[0]], [a[1],b[1]], color=(0.0,0.8,0.0), lw=15 )
-                    plt.plot( [b[0],c[0]], [b[1],c[1]], color=(0.75,0.9,0.75), lw=15 )
-            return coord
-        
-        fig, ax = plt.subplots(figsize=[12,10])
+            self.get_rho()
 
         # draw boxes
         for pauli in self.box:
@@ -663,43 +738,55 @@ class pauli_grid:
                 color = self.colors[1]
             else:
                 color = self.colors[2]
-            ax.add_patch( Rectangle( (self.box[pauli][0],self.box[pauli][1]-1), L, L, angle=45, color=color) )  
+            self.ax.add_patch( Rectangle( (self.box[pauli][0],self.box[pauli][1]-1), L, L, angle=45, color=color) )  
 
         # draw circles
         for pauli in self.box:
-            if mode=='line':
-                ax.add_patch( Circle(self.box[pauli], r, color=(0.95,0.95,0.95)) )
-            else:
-                prob = (1-rho[pauli])/2
-                ax.add_patch( Circle(self.box[pauli], r, color=(prob,prob,prob)) )
+            unhidden = see_if_unhidden(pauli)
+            if unhidden:
+                if self.mode=='line':
+                    self.ax.add_patch( Circle(self.box[pauli], r, color=(0.5,0.5,0.5)) )
+                else:
+                    prob = (1-self.rho[pauli])/2
+                    self.ax.add_patch( Circle(self.box[pauli], r, color=(prob,prob,prob)) )
 
-        if mode=='line':
-            # add bars
-            if bloch in [0,1]:
+        # update bars if required
+        if self.mode=='line':
+            if bloch in ['0','1']:
                 for other in 'IXZ':
-                    px = other*(bloch==1) + 'X' + other*(bloch==0)
-                    pz = other*(bloch==1) + 'Z' + other*(bloch==0)
-                    z_coord = add_line('Z',pz,rho[pz])
-                    x_coord = add_line('X',pz,rho[px])
-                    ax.add_patch( Circle((x_coord,z_coord), 0.05, color='black', zorder=10) )
-                px = 'I'*(bloch==0) + 'X' + 'I'*(bloch==1)
-                pz = 'I'*(bloch==0) + 'Z' + 'I'*(bloch==1)
-                add_line('Z',pz,rho[pz])
-                add_line('X',px,rho[px])
-
+                    px = other*(bloch=='1') + 'X' + other*(bloch=='0')
+                    pz = other*(bloch=='1') + 'Z' + other*(bloch=='0')
+                    z_coord = add_line('Z',pz,pz)
+                    x_coord = add_line('X',pz,px)
+                    for j in self.lines[pz]['c']:
+                        self.lines[pz]['c'][j].center = (x_coord,z_coord)
+                        self.lines[pz]['c'][j].radius = (j=='w')*0.05 + (j=='b')*0.04
+                px = 'I'*(bloch=='0') + 'X' + 'I'*(bloch=='1')
+                pz = 'I'*(bloch=='0') + 'Z' + 'I'*(bloch=='1')
+                add_line('Z',pz,pz)
+                add_line('X',px,px)
             else:
                 for pauli in self.box:
+                    for j in self.lines[pauli]['c']:
+                        self.lines[pauli]['c'][j].radius = 0.0
                     if pauli in ['ZI','IZ','ZZ']:
-                        add_line('Z',pauli,rho[pauli])
+                        add_line('Z',pauli,pauli)
                     if pauli in ['XI','IX','XX']: 
-                        add_line('X',pauli,rho[pauli])
+                        add_line('X',pauli,pauli)
                     if pauli in ['XZ','ZX']:
-                        add_line('ZX',pauli,rho[pauli])
+                        add_line('ZX',pauli,pauli)
+             
+        self.bottom.set_text(message)
         
         if labels:
-            for pauli in box:
-                plt.text(self.box[pauli][0]-0.05,self.box[pauli][1]-0.85, pauli)
-
-        plt.plot()
-        plt.axis('off')
-        plt.show()
+            for pauli in self.box:
+                plt.text(self.box[pauli][0]-0.18,self.box[pauli][1]-0.85, pauli)
+        
+        if self.y_boxes:
+            self.ax.set_xlim([-4,4])
+            self.ax.set_ylim([0,8])
+        else:
+            self.ax.set_xlim([-3,3])
+            self.ax.set_ylim([0,6])
+        
+        self.fig.canvas.draw()
