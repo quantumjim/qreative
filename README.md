@@ -12,6 +12,8 @@ Examples of how to use these tools can be found in the notebooks of the [tutoria
 * [Quantum Emoticons](https://medium.com/qiskit/making-a-quantum-computer-smile-cee86a6fc1de) <sup>1</sup>
 * [Image superposer](https://medium.com/qiskit/a-quantum-superposition-of-a-tiger-and-a-bear-b461e3b23908)
  <sup>1</sup>
+ * [Hello Qiskit](https://github.com/Qiskit/qiskit-tutorials/blob/master/community/games/Hello_Qiskit.ipynb)
+ <sup>2</sup>
  
 More will be added...
 
