@@ -15,7 +15,7 @@ import networkx as nx
 
 try:
     IBMQ.load_accounts()
-except Exception as e:
+except:
     print("You'll need to set up an IBMQ account to access anything but local simulators. See\n    https://github.com/Qiskit/qiskit-tutorials/blob/master/INSTALL.md\nfor details on how to get an account and register the credentials.")
 
 def get_backend(device):
@@ -138,7 +138,7 @@ def bell_correlation (basis,device='qasm_simulator',shots=1024):
     qc.barrier(qr)
     qc.measure(qr,cr)
     
-    job = execute(qc, backend=get_backend(device), shots=shots)
+    job = execute(qc, backend=get_backend(device), shots=shots, memory=True)
     stats = job.result().get_counts()
     
     P = 0
@@ -147,7 +147,7 @@ def bell_correlation (basis,device='qasm_simulator',shots=1024):
         if string in ['00','11']:
             P += p
             
-    return P
+    return {'P':P, 'samples':job.result().get_memory() }
 
 def bitstring_superposer (strings,device='qasm_simulator',shots=1024):
     """Prepares the superposition of the two given n bit strings. The number of qubits used is equal to the length of the string. The superposition is measured, and the process repeated many times. A dictionary with the fraction of shots for which each string occurred is returned.
@@ -220,14 +220,15 @@ def bitstring_superposer (strings,device='qasm_simulator',shots=1024):
 
     return stats_list
     
-def emoticon_superposer (emoticons,device='qasm_simulator',shots=1024,figsize=(20,20)):
+def emoticon_superposer (emoticons,device='qasm_simulator',shots=1024,figsize=(20,20),encoding=7):
     """Creates superposition of two emoticons.
     
     A dictionary is returned, which supplies the relative strength of each pair of ascii characters in the superposition. An image representing the superposition, with each pair of ascii characters appearing with an weight that represents their strength in the superposition, is also created.
     
     emoticons = A list of two strings, each of which is composed of two ascii characters, such as [ ";)" , "8)" ].
     device = A string specifying a backend. The noisy behaviour from a real device will result in emoticons other than the two supplied occuring with non-zero strength.
-    shots = Number of times the process is repeated to calculate the fractions used as strengths. For shots=1, only a single randomnly generated emoticon is return (as the key of the dict)."""
+    shots = Number of times the process is repeated to calculate the fractions used as strengths. For shots=1, only a single randomnly generated emoticon is return (as the key of the dict).
+    emcoding = Number of bits used to encode ascii characters."""
     
     # make it so that the input is a list of list of strings, even if it was just a list of strings
     if type(emoticons[0])==str:
@@ -242,12 +243,12 @@ def emoticon_superposer (emoticons,device='qasm_simulator',shots=1024,figsize=(2
             bin4emoticon = ""
             for character in emoticon:
                 bin4char = bin(ord(character))[2:]
-                bin4char = (8-len(bin4char))*'0'+bin4char
+                bin4char = (encoding-len(bin4char))*'0'+bin4char
                 bin4emoticon += bin4char
             string.append(bin4emoticon)
         strings.append(string)
         
-    stats = bitstring_superposer(strings,backend=get_backend(device),shots=shots)
+    stats = bitstring_superposer(strings,device,shots=shots)
     
     # make a list of dicts from stats
     if type(stats) is dict:
@@ -262,8 +263,8 @@ def emoticon_superposer (emoticons,device='qasm_simulator',shots=1024,figsize=(2
         plt.rc('font', family='monospace')
         ascii_stats = {}
         for string in stats:
-            char = chr(int( string[0:8] ,2)) # get string of the leftmost 8 bits and convert to an ASCII character
-            char += chr(int( string[8:16] ,2)) # do the same for string of rightmost 8 bits, and add it to the previous character
+            char = chr(int( string[0:encoding] ,2)) # get string of the leftmost bits and convert to an ASCII character
+            char += chr(int( string[encoding:2*encoding] ,2)) # do the same for string of rightmost bits, and add it to the previous character
             prob = stats[string] # fraction of shots for which this result occurred
             ascii_stats[char] = prob
             # create plot with all characters on top of each other with alpha given by how often it turned up in the output
@@ -311,7 +312,7 @@ def image_superposer (all_images,images,device='qasm_simulator',shots=1024,figsi
             string.append( bin4pic )
         strings.append(string)
     
-    full_stats = bitstring_superposer(strings,backend=get_backend(device),shots=shots)
+    full_stats = bitstring_superposer(strings,device,shots=shots)
         
     # make a list of dicts from stats
     if type(full_stats) is dict:
@@ -348,7 +349,7 @@ def image_superposer (all_images,images,device='qasm_simulator',shots=1024,figsi
         for j in reversed(range(n)):
             filename = all_images[int(sorted_strings[j],2)]
             if filename:
-                image = plt.imread("images/"+filename+".png")
+                image = plt.imread( os.path.join(os.path.dirname(__file__), "images/"+filename+".png") )
                 plt.imshow(image,alpha=alpha[j])
         plt.axis('off')
         plt.show()
@@ -375,27 +376,30 @@ class layout:
         
         device = A string specifying a device, or a list of two integers to define a grid.
         
-        the following properties are determined.
+        the following attributes are determined.
         
         num = Number of qubits on the device.
         pairs = Dictionary detailing the pairs of qubits for which cnot gates can be directly implemented. Each value is a list of two qubits for which this is possible. The corresponding key is a string that is used as the name of the pair.
         pos = A dictionary of positions for qubits, to be used in plots.
         """
-        if device in ['ibmqx2', 'ibmqx4', 'ibmqx5']:
+        if device in ['ibmq_5_tenerife', 'ibmq_16_melbourne']:
                         
             backend = get_backend(device)
-            self.num = backend.configuration['n_qubits']
-            coupling = backend.configuration['coupling_map']
+            self.num = backend.configuration().n_qubits
+            coupling = backend.configuration().coupling_map
             self.pairs = {}
             char = 65
             for pair in coupling:
                 self.pairs[chr(char)] = pair
                 char += 1
-            if device in ['ibmqx2','ibmqx4']:
+            if device in ['ibmq_5_tenerife']:
                 self.pos = { 0: [1,1], 1: [1,0], 2: [0.5,0.5], 3: [0,0], 4: [0,1] }        
-            elif device=='ibmqx5':
+            elif device=='ibmq_16_rueschlikon':
                 self.pos = { 0: [0,0], 1: [0,1],  2: [1,1],  3: [2,1],  4: [3,1],  5: [4,1],  6: [5,1],  7: [6,1],
 8: [7,1], 9: [7,0], 10: [6,0], 11: [5,0], 12: [4,0], 13: [3,0], 14: [2,0], 15: [1,0] }
+            elif device=='ibmq_16_melbourne':
+                self.pos = { 0: (0,1), 1: (1,1),  2: (2,1),  3: (3,1),  4: (4,1),  5: (5,1),  6: (6,1),
+                7: (7,0), 8: (6,0), 9: (5,0), 10: (4,0), 11: (3,0), 12: (2,0), 13: (1,0) }
             
         elif type(device) is list:
             
@@ -658,8 +662,8 @@ class pauli_grid():
         """
         rho = None
             Dictionary of expectation values for 'ZI', 'IZ', 'ZZ', 'XI', 'IX', 'XX', 'ZX' and 'XZ'. If supplied, this will be visualized instead of the results of running self.qc.
-        labels = None
-            Dictionary of strings for 'ZI', 'IZ', 'ZZ', 'XI', 'IX', 'XX', 'ZX' and 'XZ' that are printed in the corresponding boxes.
+        labels = False
+            Determines whether basis labels are printed in the corresponding boxes.
         bloch = None
             If a qubit name is supplied, and if mode='line', Bloch circles are displayed for this qubit
         hidden = []
