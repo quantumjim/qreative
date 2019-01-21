@@ -9,9 +9,9 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Rectangle
-import os
 import copy
 import networkx as nx
+from pydub import AudioSegment
 
 try:
     IBMQ.load_accounts()
@@ -285,30 +285,24 @@ def emoticon_superposer (emoticons,bias=0.5,device='qasm_simulator',shots=1024,f
     return ascii_stats_list
 
 
-def image_superposer (all_images,images,bias=0.5,device='qasm_simulator',shots=1024,figsize=(20,20)):
-    """Creates superposition of two images from a set of images.
-    
-    A dictionary is returned, which supplies the relative strength of each pair of ascii characters in the superposition. An image representing the superposition, with each of the original images appearing with an weight that represents their strength in the superposition, is also created.
-    
-    all_images = List of strings that are filenames for a set of images.  The files should be located in 'images/<filename>.png.
-    images = List of strings for image files to be superposed. This can either contain the strings for two files, or for all in all_images. Other options are not currently supported.
-    device = A string specifying a backend. The noisy behaviour from a real device will result in images other than those intended appearing with non-zero strength.
-    shots = Number of times the process is repeated to calculate the fractions used as strengths. For shots=1, only a single randomnly generated emoticon is return (as the key of the dict)."""
-    image_num = len(all_images)
-    bit_num = int(np.ceil( np.log2(image_num) ))
-    all_images += [None]*(2**bit_num-image_num)
+def _filename_superposer (all_files,files,bias,device,shots):
+    """Takes a list of all possible filenames (all_files) as well as a pair to be superposed or list of such pairs (files) and superposes them for a given bias and number of shots on a given device. Output is a dictionary will filenames as keys and the corresponding fractions of shots as target.""" 
+
+    file_num = len(all_files)
+    bit_num = int(np.ceil( np.log2(file_num) ))
+    all_files += [None]*(2**bit_num-file_num)
     
     # make it so that the input is a list of list of strings, even if it was just a list of strings
-    if type(images[0])==str:
-        images_list = [images]
+    if type(files[0])==str:
+        files_list = [files]
     else:
-        images_list = images
+        files_list = files
     
     strings = []
-    for images in images_list:
+    for files in files_list:
         string = []
-        for image in images:
-            bin4pic = "{0:b}".format(all_images.index(image))
+        for file in files:
+            bin4pic = "{0:b}".format(all_files.index(file))
             bin4pic = '0'*(bit_num-len(bin4pic)) + bin4pic
             string.append( bin4pic )
         strings.append(string)
@@ -320,53 +314,86 @@ def image_superposer (all_images,images,bias=0.5,device='qasm_simulator',shots=1
         full_stats_list = [full_stats]
     else:
         full_stats_list = full_stats
-    
+        
     stats_list = []
     for full_stats in full_stats_list:
         Z = 0
-        for j in range(image_num):
+        for j in range(file_num):
             string = "{0:b}".format(j)
             string = '0'*(bit_num-len(string)) + string
             if string in full_stats:
                 Z += full_stats[string]    
         stats = {}
-        for j in range(image_num):
+        for j in range(file_num):
             string = "{0:b}".format(j)
             string = '0'*(bit_num-len(string)) + string
             if string in full_stats:
                 stats[string] = full_stats[string]/Z
         stats_list.append(stats)
-            
+        
+    file_stats_list = []
+    for stats in stats_list:
+        file_stats = {}
+        for string in stats:
+            file_stats[ all_files[int(string,2)] ] = stats[string]
+        file_stats_list.append(file_stats)
+    
+    return  file_stats_list
+
+
+def image_superposer (all_images,images,bias=0.5,device='qasm_simulator',shots=1024,figsize=(20,20)):
+    """Creates superposition of two images from a set of images.
+    
+    A dictionary is returned, which supplies the relative strength of each pair of ascii characters in the superposition. An image representing the superposition, with each of the original images appearing with an weight that represents their strength in the superposition, is also created.
+    
+    all_images = List of strings that are filenames for a set of images.  The files should be located in 'images/<filename>.png relative to where the code is executed.
+    images = List of strings for image files to be superposed. This can either contain the strings for two files, or for all in all_images. Other options are not currently supported.
+    device = A string specifying a backend. The noisy behaviour from a real device will result in images other than those intended appearing with non-zero strength.
+    shots = Number of times the process is repeated to calculate the fractions used as strengths."""
+
+    image_stats_list = _filename_superposer (all_images,images,bias,device,shots)
+    print(image_stats_list)
+    
+    for image_stats in image_stats_list:  
         # sort from least to most likely and create corresponding lists of the strings and fractions
-        sorted_strings = sorted(stats,key=stats.get)
-        sorted_fracs = sorted(stats.values())
-        n = len(stats)
-        # construct alpha values such that the final image is a weighted average of the images specified by the keys of `stats`
+        sorted_strings = sorted(image_stats,key=image_stats.get)
+        sorted_fracs = sorted(image_stats.values())
+        n = len(image_stats)
+        # construct alpha values such that the final image is a weighted average of the images specified by the keys of `image_stats`
         alpha = [ sorted_fracs[0] ]
         for j in range(0,n-1):
             alpha.append( ( alpha[j]/(1-alpha[j]) ) * ( sorted_fracs[j+1] / sorted_fracs[j] ) )
 
         fig, ax = plt.subplots(figsize=figsize)
         for j in reversed(range(n)):
-            filename = all_images[int(sorted_strings[j],2)]
+            filename = sorted_strings[j]
             if filename:
                 image = plt.imread( "images/"+filename+".png" )
                 plt.imshow(image,alpha=alpha[j])
         plt.axis('off')
         plt.show()
     
-    image_stats_list = []
-    for stats in stats_list:
-        image_stats = {}
-        for string in stats:
-            image_stats[ all_images[int(string,2)] ] = stats[string]
-        image_stats_list.append(image_stats)
-    
     # if only one instance was given, output dict rather than list with a single dict
     if len(image_stats_list)==1:
         image_stats_list = image_stats_list[0]
     
     return image_stats_list
+
+def audio_superposer (all_audio,audio,bias=0.5,device='qasm_simulator',shots=1024,format='wav'):
+    
+    audio_stats_list = _filename_superposer (all_audio,audio,bias,device,shots)
+    
+    for audio_stats in audio_stats_list:
+        loudest = max(audio_stats, key=audio_stats.get)
+        mixed = AudioSegment.from_wav('audio/'+loudest+'.'+format)
+        for filename in audio_stats:
+            if filename != loudest:
+                dBFS = np.log10( audio_stats[filename]/audio_stats[loudest] )
+                file = AudioSegment.from_wav('audio/'+filename+'.'+format) - dBFS
+                mixed = mixed.overlay(file)
+        mixed.export('outputs/audio_'+'_'.join(audio)+'.'+format, format=format) 
+    
+    return audio_stats_list
 
 
 class layout:
