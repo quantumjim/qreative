@@ -149,7 +149,7 @@ def bell_correlation (basis,device='qasm_simulator',shots=1024):
             
     return {'P':P, 'samples':job.result().get_memory() }
 
-def bitstring_superposer (strings,device='qasm_simulator',shots=1024):
+def bitstring_superposer (strings,bias=0.5,device='qasm_simulator',shots=1024):
     """Prepares the superposition of the two given n bit strings. The number of qubits used is equal to the length of the string. The superposition is measured, and the process repeated many times. A dictionary with the fraction of shots for which each string occurred is returned.
     
     string = List of two binary strings. If the list has more than two elements, all but the first two are ignored.
@@ -177,10 +177,10 @@ def bitstring_superposer (strings,device='qasm_simulator',shots=1024):
         cr = ClassicalRegister(num)
         qc = QuantumCircuit(qr,cr)
 
-        if len(strings)==2**num:
+        if len(strings)==2**num: # create equal superposition of all if all are asked for
             for n in range(num):
                 qc.h(qr[n])
-        else:
+        else: # create superposition of just two
             diff = []
             for bit in range(num):
                 if strings[0][bit]==strings[1][bit]:
@@ -189,7 +189,8 @@ def bitstring_superposer (strings,device='qasm_simulator',shots=1024):
                 if strings[0][bit]!=strings[1][bit]:
                     diff.append(bit)
             if diff:
-                qc.h(qr[diff[0]])
+                frac = np.arccos(np.sqrt(bias))/(np.pi/2)
+                qc.rx(np.pi*frac,qr[diff[0]])
                 for bit in diff[1:]:
                     qc.cx(qr[diff[0]],qr[bit])
                 for bit in diff:
@@ -220,7 +221,7 @@ def bitstring_superposer (strings,device='qasm_simulator',shots=1024):
 
     return stats_list
     
-def emoticon_superposer (emoticons,device='qasm_simulator',shots=1024,figsize=(20,20),encoding=7):
+def emoticon_superposer (emoticons,bias=0.5,device='qasm_simulator',shots=1024,figsize=(20,20),encoding=7):
     """Creates superposition of two emoticons.
     
     A dictionary is returned, which supplies the relative strength of each pair of ascii characters in the superposition. An image representing the superposition, with each pair of ascii characters appearing with an weight that represents their strength in the superposition, is also created.
@@ -248,7 +249,7 @@ def emoticon_superposer (emoticons,device='qasm_simulator',shots=1024,figsize=(2
             string.append(bin4emoticon)
         strings.append(string)
         
-    stats = bitstring_superposer(strings,device,shots=shots)
+    stats = bitstring_superposer(strings,bias=bias,device=device,shots=shots)
     
     # make a list of dicts from stats
     if type(stats) is dict:
@@ -284,7 +285,7 @@ def emoticon_superposer (emoticons,device='qasm_simulator',shots=1024,figsize=(2
     return ascii_stats_list
 
 
-def image_superposer (all_images,images,device='qasm_simulator',shots=1024,figsize=(20,20)):
+def image_superposer (all_images,images,bias=0.5,device='qasm_simulator',shots=1024,figsize=(20,20)):
     """Creates superposition of two images from a set of images.
     
     A dictionary is returned, which supplies the relative strength of each pair of ascii characters in the superposition. An image representing the superposition, with each of the original images appearing with an weight that represents their strength in the superposition, is also created.
@@ -312,7 +313,7 @@ def image_superposer (all_images,images,device='qasm_simulator',shots=1024,figsi
             string.append( bin4pic )
         strings.append(string)
     
-    full_stats = bitstring_superposer(strings,device,shots=shots)
+    full_stats = bitstring_superposer(strings,bias=bias,device=device,shots=shots)
         
     # make a list of dicts from stats
     if type(full_stats) is dict:
