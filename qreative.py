@@ -350,7 +350,7 @@ def image_superposer (all_images,images,bias=0.5,device='qasm_simulator',shots=1
         for j in reversed(range(n)):
             filename = all_images[int(sorted_strings[j],2)]
             if filename:
-                image = plt.imread( os.path.join(os.path.dirname(__file__), "images/"+filename+".png") )
+                image = plt.imread( "images/"+filename+".png" )
                 plt.imshow(image,alpha=alpha[j])
         plt.axis('off')
         plt.show()
