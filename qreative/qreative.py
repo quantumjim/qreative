@@ -31,8 +31,13 @@ def get_backend(device):
 def get_noise(noisy):
     """Returns a noise model when input is True"""
     if noisy:
-        p_meas = 0.08
-        p_gate1 = 0.04
+        
+        if type(noisy) is float:
+            p_meas = noisy
+            p_gate1 = noisy
+        else:
+            p_meas = 0.08
+            p_gate1 = 0.04
 
         error_meas = pauli_error([('X',p_meas), ('I', 1 - p_meas)])
         error_gate1 = depolarizing_error(p_gate1, 1)
@@ -865,7 +870,7 @@ class pauli_grid():
         
 class qrng ():
     """This object generations `num` strings, each of `precision=8192/num` bits. These are then dispensed one-by-one as random integers, floats, etc, depending on the method called. Once all `num` strings are used, it'll loop back around."""
-    def __init__( self, precision=None, num = 1280, sim=True, verbose=True ):
+    def __init__( self, precision=None, num = 1280, sim=True, noisy=False, noise_only=False, verbose=True ):
         
         if precision:
             self.precision = precision
@@ -877,7 +882,8 @@ class qrng ():
         q = QuantumRegister(5)
         c = ClassicalRegister(5)
         qc = QuantumCircuit(q,c)
-        qc.h(q)
+        if not noise_only:
+            qc.h(q)
         qc.measure(q,c)
         
         if sim:
@@ -888,7 +894,7 @@ class qrng ():
         
         if verbose and not sim:
             print('Sending job to quantum device')
-        job = execute(qc,backend,shots=8192,memory=True)
+        job = execute(qc,backend,shots=8192,noise_model=get_noise(noisy),memory=True)
         data = job.result().get_memory()
         if verbose and not sim:
             print('Results from device received')
@@ -898,12 +904,14 @@ class qrng ():
             full_data += list(datum)
         
         self.int_list = []
+        self.bit_list = []
         n = 0
         for _ in range(num):
             bitstring = ''
             for b in range(self.precision):
                 bitstring += full_data[n]
                 n += 1
+            self.bit_list.append(bitstring)
             self.int_list.append( int(bitstring,2) )
             
         self.n = 0
