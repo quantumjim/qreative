@@ -4,7 +4,8 @@
 # Later versions:   Copyright © 2018 IBM Research
 
 from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, execute, Aer, IBMQ
-from qiskit.providers.aer import noise
+from qiskit.providers.aer.noise import NoiseModel
+from qiskit.providers.aer.noise.errors import pauli_error, depolarizing_error
 
 import numpy as np
 import random
@@ -28,13 +29,19 @@ def get_backend(device):
     return backend
 
 def get_noise(noisy):
-    """Returns noise model of the device if requested"""
+    """Returns a noise model when input is True"""
     if noisy:
-        device = get_backend('ibmq_16_melbourne')
-        try:
-            noise_model = noise.device.basic_device_noise_model( device.properties() )
-        except:
-            noise_model = None
+        p_meas = 0.08
+        p_gate1 = 0.04
+
+        error_meas = pauli_error([('X',p_meas), ('I', 1 - p_meas)])
+        error_gate1 = depolarizing_error(p_gate1, 1)
+        error_gate2 = error_gate1.kron(error_gate1)
+        
+        noise_model = NoiseModel()
+        noise_model.add_all_qubit_quantum_error(error_meas, "measure")
+        noise_model.add_all_qubit_quantum_error(error_gate1, ["u1", "u2", "u3"])
+        noise_model.add_all_qubit_quantum_error(error_gate2, ["cx"])
     else:
         noise_model = None
     return noise_model
@@ -316,7 +323,7 @@ def emoticon_superposer (emoticons,bias=0.5,device='qasm_simulator',noisy=False,
     return ascii_stats_list
 
 
-def _filename_superposer (all_files,files,bias,device,noise,shots):
+def _filename_superposer (all_files,files,bias,device,noisy,shots):
     """Takes a list of all possible filenames (all_files) as well as a pair to be superposed or list of such pairs (files) and superposes them for a given bias and number of shots on a given device. Output is a dictionary will filenames as keys and the corresponding fractions of shots as target.""" 
 
     file_num = len(all_files)
@@ -412,7 +419,7 @@ def image_superposer (all_images,images,bias=0.5,device='qasm_simulator',noisy=F
 
 def audio_superposer (all_audio,audio,bias=0.5,device='qasm_simulator',noisy=False,shots=1024,format='wav'):
     
-    audio_stats_list = _filename_superposer (all_audio,audio,bias,device,noise,shots)
+    audio_stats_list = _filename_superposer (all_audio,audio,bias,device,noisy,shots)
     
     for audio_stats in audio_stats_list:
         loudest = max(audio_stats, key=audio_stats.get)
