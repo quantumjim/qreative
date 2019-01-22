@@ -4,6 +4,7 @@
 # Later versions:   Copyright © 2018 IBM Research
 
 from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, execute, Aer, IBMQ
+from qiskit.providers.aer import noise
 
 import numpy as np
 import random
@@ -25,6 +26,18 @@ def get_backend(device):
     except:
         backend = IBMQ.get_backend(device)
     return backend
+
+def get_noise(noisy):
+    """Returns noise model of the device if requested"""
+    if noisy:
+        device = get_backend('ibmq_16_melbourne')
+        try:
+            noise_model = noise.device.basic_device_noise_model( device.properties() )
+        except:
+            noise_model = None
+    else:
+        noise_model = None
+    return noise_model
     
 class ladder:
     """An integer implemented on a single qubit. Addition and subtraction are implemented via partial NOT gates."""
@@ -42,7 +55,7 @@ class ladder:
         delta = Amount by which to change the value of the ladder object. Can be int or float."""
         self.qc.rx(np.pi*delta/self.d,self.qr[0])
         
-    def value(self,device='qasm_simulator',shots=1024):
+    def value(self,device='qasm_simulator',noisy=False,shots=1024):
         """Returns the current version of the ladder operator as an int. If floats have been added to this value, the sum of all floats added thus far are rounded.
         
         device = A string specifying a backend. The noisy behaviour from a real device will result in some randomness in the value given, and can lead to the reported value being less than the true value on average. These effects will be more evident for high `d`.
@@ -50,7 +63,7 @@ class ladder:
         temp_qc = copy.deepcopy(self.qc)
         temp_qc.barrier(self.qr)
         temp_qc.measure(self.qr,self.cr)
-        job = execute(temp_qc, backend=get_backend(device), shots=shots)
+        job = execute(temp_qc,backend=get_backend(device),noise_model=get_noise(noisy),shots=shots)
         if '1' in job.result().get_counts():
             p = job.result().get_counts()['1']/shots
         else:
@@ -70,13 +83,16 @@ class twobit:
         self.prepare({'Y':None})
         
     def prepare(self,state):
-        """Supplying `state={basis,b}` prepares a twobit with the boolean `b` stored using the measurement type specified by `basis` (which can be 'X' or 'Z').
+        """Supplying `state={basis,b}` prepares a twobit with the boolean `b` stored using the measurement type specified by `basis` (which can be 'X', 'Y' or 'Z').
         
-        Supplying `basis='Y'` (and arbitrary `b`) will result in the twobit giving a random result for both measurement types. """
+        Note that `basis='Y'` (and arbitrary `b`) will result in the twobit giving a random result for both 'X' and 'Z' (and similarly for any one versus the remaining two). """
         self.qc = QuantumCircuit(self.qr, self.cr)
         if 'Y' in state:
             self.qc.h(self.qr[0])
-            self.qc.s(self.qr[0])
+            if state['Y']:
+                self.qc.sdg(self.qr[0])
+            else:
+                self.qc.s(self.qr[0])
         elif 'X' in state:
             if state['X']:
                 self.qc.x(self.qr[0])
@@ -85,7 +101,7 @@ class twobit:
             if state['Z']:
                 self.qc.x(self.qr[0])
                 
-    def value (self,basis,device='qasm_simulator',shots=1024,mitigate=True):
+    def value (self,basis,device='qasm_simulator',noisy=False,shots=1024,mitigate=True):
         """Extracts the boolean value for the given measurement type. The twobit is also reinitialized to ensure that the same value would if the same call to `measure()` was repeated.
         
         basis = 'X' or 'Z', specifying the desired measurement type.
@@ -94,9 +110,12 @@ class twobit:
         mitigate = Boolean specifying whether mitigation should be applied. If so the values obtained over `shots` samples are considered, and the fraction which output `True` is calculated. If this is more than 90%, measure will return `True`. If less than 10%, it will return `False`, otherwise it returns a random value using the fraction as the probability."""
         if basis=='X':
             self.qc.h(self.qr[0])
+        elif basis=='Y':
+            self.qc.sdg(self.qr[0])
+            self.qc.h(self.qr[0])
         self.qc.barrier(self.qr)
         self.qc.measure(self.qr,self.cr)
-        job = execute(self.qc, backend=get_backend(device), shots=shots)
+        job = execute(self.qc, backend=get_backend(device), noise_model=get_noise(noisy), shots=shots)
         stats = job.result().get_counts()
         if '1' in stats:
             p = stats['1']/shots
@@ -112,8 +131,20 @@ class twobit:
         
         return measured_value
 
+    def X_value (self,device='qasm_simulator',noisy=False,shots=1024,mitigate=True):
+        """Extracts the boolean value via the X basis. For details of kwargs, see `value()`."""
+        return self.value('X',device=device,noisy=noisy,shots=shots,mitigate=mitigate)
+
+    def Y_value (self,device='qasm_simulator',noisy=False,shots=1024,mitigate=True):
+        """Extracts the boolean value via the X basis. For details of kwargs, see `value()`."""
+        return self.value('Y',device=device,noisy=noisy,shots=shots,mitigate=mitigate)
         
-def bell_correlation (basis,device='qasm_simulator',shots=1024):
+    def Z_value (self,device='qasm_simulator',noisy=False,shots=1024,mitigate=True):
+        """Extracts the boolean value via the X basis. For details of kwargs, see `value()`."""
+        return self.value('Z',device=device,noisy=noisy,shots=shots,mitigate=mitigate)
+    
+        
+def bell_correlation (basis,device='qasm_simulator',noisy=False,shots=1024):
     """Prepares a rotated Bell state of two qubits. Measurement is done in the specified basis for each qubit. The fraction of results for which the two qubits agree is returned.
     
     basis = String specifying measurement bases. 'XX' denotes X measurement on each qubit, 'XZ' denotes X measurement on qubit 0 and Z on qubit 1, vice-versa for 'ZX', and 'ZZ' denotes 'Z' measurement on both.
@@ -138,7 +169,7 @@ def bell_correlation (basis,device='qasm_simulator',shots=1024):
     qc.barrier(qr)
     qc.measure(qr,cr)
     
-    job = execute(qc, backend=get_backend(device), shots=shots, memory=True)
+    job = execute(qc, backend=get_backend(device), noise_model=get_noise(noisy), shots=shots, memory=True)
     stats = job.result().get_counts()
     
     P = 0
@@ -149,7 +180,7 @@ def bell_correlation (basis,device='qasm_simulator',shots=1024):
             
     return {'P':P, 'samples':job.result().get_memory() }
 
-def bitstring_superposer (strings,bias=0.5,device='qasm_simulator',shots=1024):
+def bitstring_superposer (strings,bias=0.5,device='qasm_simulator',noisy=False,shots=1024):
     """Prepares the superposition of the two given n bit strings. The number of qubits used is equal to the length of the string. The superposition is measured, and the process repeated many times. A dictionary with the fraction of shots for which each string occurred is returned.
     
     string = List of two binary strings. If the list has more than two elements, all but the first two are ignored.
@@ -202,7 +233,7 @@ def bitstring_superposer (strings,bias=0.5,device='qasm_simulator',shots=1024):
         
         batch.append(qc)
 
-    job = execute(batch, backend=get_backend(device), shots=shots)
+    job = execute(batch, backend=get_backend(device), noise_model=get_noise(noisy), shots=shots)
     
     stats_raw_list = []
     for j in range(len(strings_list)):
@@ -221,7 +252,7 @@ def bitstring_superposer (strings,bias=0.5,device='qasm_simulator',shots=1024):
 
     return stats_list
     
-def emoticon_superposer (emoticons,bias=0.5,device='qasm_simulator',shots=1024,figsize=(20,20),encoding=7):
+def emoticon_superposer (emoticons,bias=0.5,device='qasm_simulator',noisy=False,shots=1024,figsize=(20,20),encoding=7):
     """Creates superposition of two emoticons.
     
     A dictionary is returned, which supplies the relative strength of each pair of ascii characters in the superposition. An image representing the superposition, with each pair of ascii characters appearing with an weight that represents their strength in the superposition, is also created.
@@ -249,7 +280,7 @@ def emoticon_superposer (emoticons,bias=0.5,device='qasm_simulator',shots=1024,f
             string.append(bin4emoticon)
         strings.append(string)
         
-    stats = bitstring_superposer(strings,bias=bias,device=device,shots=shots)
+    stats = bitstring_superposer(strings,bias=bias,device=device,noisy=noisy,shots=shots)
     
     # make a list of dicts from stats
     if type(stats) is dict:
@@ -285,7 +316,7 @@ def emoticon_superposer (emoticons,bias=0.5,device='qasm_simulator',shots=1024,f
     return ascii_stats_list
 
 
-def _filename_superposer (all_files,files,bias,device,shots):
+def _filename_superposer (all_files,files,bias,device,noise,shots):
     """Takes a list of all possible filenames (all_files) as well as a pair to be superposed or list of such pairs (files) and superposes them for a given bias and number of shots on a given device. Output is a dictionary will filenames as keys and the corresponding fractions of shots as target.""" 
 
     file_num = len(all_files)
@@ -307,7 +338,7 @@ def _filename_superposer (all_files,files,bias,device,shots):
             string.append( bin4pic )
         strings.append(string)
     
-    full_stats = bitstring_superposer(strings,bias=bias,device=device,shots=shots)
+    full_stats = bitstring_superposer(strings,bias=bias,device=device,noisy=noisy,shots=shots)
         
     # make a list of dicts from stats
     if type(full_stats) is dict:
@@ -341,7 +372,7 @@ def _filename_superposer (all_files,files,bias,device,shots):
     return  file_stats_list
 
 
-def image_superposer (all_images,images,bias=0.5,device='qasm_simulator',shots=1024,figsize=(20,20)):
+def image_superposer (all_images,images,bias=0.5,device='qasm_simulator',noisy=False,shots=1024,figsize=(20,20)):
     """Creates superposition of two images from a set of images.
     
     A dictionary is returned, which supplies the relative strength of each pair of ascii characters in the superposition. An image representing the superposition, with each of the original images appearing with an weight that represents their strength in the superposition, is also created.
@@ -351,7 +382,7 @@ def image_superposer (all_images,images,bias=0.5,device='qasm_simulator',shots=1
     device = A string specifying a backend. The noisy behaviour from a real device will result in images other than those intended appearing with non-zero strength.
     shots = Number of times the process is repeated to calculate the fractions used as strengths."""
 
-    image_stats_list = _filename_superposer (all_images,images,bias,device,shots)
+    image_stats_list = _filename_superposer (all_images,images,bias,device,noise,shots)
     print(image_stats_list)
     
     for image_stats in image_stats_list:  
@@ -379,9 +410,9 @@ def image_superposer (all_images,images,bias=0.5,device='qasm_simulator',shots=1
     
     return image_stats_list
 
-def audio_superposer (all_audio,audio,bias=0.5,device='qasm_simulator',shots=1024,format='wav'):
+def audio_superposer (all_audio,audio,bias=0.5,device='qasm_simulator',noisy=False,shots=1024,format='wav'):
     
-    audio_stats_list = _filename_superposer (all_audio,audio,bias,device,shots)
+    audio_stats_list = _filename_superposer (all_audio,audio,bias,device,noise,shots)
     
     for audio_stats in audio_stats_list:
         loudest = max(audio_stats, key=audio_stats.get)
@@ -580,7 +611,7 @@ class layout:
 class pauli_grid():
     # Allows a quantum circuit to be created, modified and implemented, and visualizes the output in the style of 'Hello Quantum'.
 
-    def __init__(self,device='qasm_simulator',shots=1024,mode='circle',y_boxes=False):
+    def __init__(self,device='qasm_simulator',noisy=False,shots=1024,mode='circle',y_boxes=False):
         """
         device='qasm_simulator'
             Backend to be used by Qiskit to calculate expectation values (defaults to local simulator).
@@ -593,6 +624,7 @@ class pauli_grid():
         """
         
         self.backend = get_backend(device)
+        self.noise_model = get_noise(noisy)
         self.shots = shots
         
         self.y_boxes = y_boxes
@@ -656,7 +688,7 @@ class pauli_grid():
                     temp_qc.h(self.qr[j])
             temp_qc.barrier(self.qr)
             temp_qc.measure(self.qr,self.cr)
-            job = execute(temp_qc, backend=self.backend, shots=self.shots)
+            job = execute(temp_qc, backend=self.backend, noise_model=self.noise_model, shots=self.shots)
             results[basis] = job.result().get_counts()
             for string in results[basis]:
                 results[basis][string] = results[basis][string]/self.shots
@@ -822,3 +854,69 @@ class pauli_grid():
             self.ax.set_ylim([0,6])
         
         self.fig.canvas.draw()
+        
+        
+class qrng ():
+    """This object generations `num` strings, each of `precision=8192/num` bits. These are then dispensed one-by-one as random integers, floats, etc, depending on the method called. Once all `num` strings are used, it'll loop back around."""
+    def __init__( self, precision=None, num = 1280, sim=True, verbose=True ):
+        
+        if precision:
+            self.precision = precision
+            self.num = int(np.floor( 5*8192/self.precision ))
+        else:
+            self.num = num
+            self.precision = int(np.floor( 5*8192/self.num ))
+        
+        q = QuantumRegister(5)
+        c = ClassicalRegister(5)
+        qc = QuantumCircuit(q,c)
+        qc.h(q)
+        qc.measure(q,c)
+        
+        if sim:
+            backend=Aer.get_backend('qasm_simulator')
+        else:
+            IBMQ.load_accounts()
+            backend=IBMQ.get_backend('ibmq_5_tenerife')
+        
+        if verbose and not sim:
+            print('Sending job to quantum device')
+        job = execute(qc,backend,shots=8192,memory=True)
+        data = job.result().get_memory()
+        if verbose and not sim:
+            print('Results from device received')
+        
+        full_data = []
+        for datum in data:
+            full_data += list(datum)
+        
+        self.int_list = []
+        n = 0
+        for _ in range(num):
+            bitstring = ''
+            for b in range(self.precision):
+                bitstring += full_data[n]
+                n += 1
+            self.int_list.append( int(bitstring,2) )
+            
+        self.n = 0
+    
+    def _iterate(self):
+        
+        self.n = self.n+1 % self.num
+    
+    def rand_int(self):
+        
+        rand_int = self.int_list[self.n]
+        
+        self._iterate()
+        
+        return rand_int
+    
+    def rand(self):
+        
+        rand_float = self.int_list[self.n] / 2**self.precision
+        
+        self._iterate()
+        
+        return rand_float
