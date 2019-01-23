@@ -83,7 +83,10 @@ class ladder:
         temp_qc = copy.deepcopy(self.qc)
         temp_qc.barrier(self.qr)
         temp_qc.measure(self.qr,self.cr)
-        job = execute(temp_qc,backend=get_backend(device),noise_model=get_noise(noisy),shots=shots)
+        try:
+            job = execute(temp_qc,backend=get_backend(device),noise_model=get_noise(noisy),shots=shots)
+        except:
+            job = execute(temp_qc,backend=get_backend(device),shots=shots)
         if '1' in job.result().get_counts():
             p = job.result().get_counts()['1']/shots
         else:
@@ -135,7 +138,10 @@ class twobit:
             self.qc.h(self.qr[0])
         self.qc.barrier(self.qr)
         self.qc.measure(self.qr,self.cr)
-        job = execute(self.qc, backend=get_backend(device), noise_model=get_noise(noisy), shots=shots)
+        try:
+            job = execute(self.qc, backend=get_backend(device), noise_model=get_noise(noisy), shots=shots)
+        except:
+            job = execute(self.qc, backend=get_backend(device), shots=shots)
         stats = job.result().get_counts()
         if '1' in stats:
             p = stats['1']/shots
@@ -189,7 +195,10 @@ def bell_correlation (basis,device='qasm_simulator',noisy=False,shots=1024):
     qc.barrier(qr)
     qc.measure(qr,cr)
     
-    job = execute(qc, backend=get_backend(device), noise_model=get_noise(noisy), shots=shots, memory=True)
+    try:
+        job = execute(qc, backend=get_backend(device), noise_model=get_noise(noisy), shots=shots, memory=True)
+    except:
+        job = execute(qc, backend=get_backend(device), shots=shots, memory=True)
     stats = job.result().get_counts()
     
     P = 0
@@ -253,8 +262,10 @@ def bitstring_superposer (strings,bias=0.5,device='qasm_simulator',noisy=False,s
         
         batch.append(qc)
 
-    job = execute(batch, backend=get_backend(device), noise_model=get_noise(noisy), shots=shots)
-    
+    try:
+        job = execute(batch, backend=get_backend(device), noise_model=get_noise(noisy), shots=shots)
+    except:
+        job = execute(batch, backend=get_backend(device), shots=shots)
     stats_raw_list = []
     for j in range(len(strings_list)):
         stats_raw_list.append( job.result().get_counts(batch[j]) )
@@ -708,7 +719,10 @@ class pauli_grid():
                     temp_qc.h(self.qr[j])
             temp_qc.barrier(self.qr)
             temp_qc.measure(self.qr,self.cr)
-            job = execute(temp_qc, backend=self.backend, noise_model=self.noise_model, shots=self.shots)
+            try:
+                job = execute(temp_qc, backend=self.backend, noise_model=self.noise_model, shots=self.shots)
+            except:
+                job = execute(temp_qc, backend=self.backend, shots=self.shots)
             results[basis] = job.result().get_counts()
             for string in results[basis]:
                 results[basis][string] = results[basis][string]/self.shots
@@ -902,7 +916,10 @@ class qrng ():
         
         if verbose and not sim:
             print('Sending job to quantum device')
-        job = execute(qc,backend,shots=8192,noise_model=get_noise(noisy),memory=True)
+        try:
+            job = execute(qc,backend,shots=8192,noise_model=get_noise(noisy),memory=True)
+        except:
+            job = execute(qc,backend,shots=8192,memory=True)
         data = job.result().get_memory()
         if verbose and not sim:
             print('Results from device received')
@@ -943,3 +960,77 @@ class qrng ():
         self._iterate()
         
         return rand_float
+
+    
+class random_grid ():
+    
+        def __init__(self,Lx,Ly):
+        
+            self.Lx = Lx
+            self.Ly = Ly
+        
+            self.qr = QuantumRegister(Lx*Ly)
+            self.cr = ClassicalRegister(Lx*Ly)
+            self.qc = QuantumCircuit(self.qr,self.cr)
+            
+        def _address(self,x,y):
+            return y*self.Lx + x
+        
+        def neighbours(self,x,y):
+            neighbours = []
+            for (xx,yy) in [(x+1,y),(x-1,y),(x,y+1),(x,y-1)]:
+                if (xx>=0) and (xx<=self.Lx-1) and (yy>=0) and (yy<=self.Ly-1):
+                    neighbours.append( (xx,yy) )
+            return neighbours
+                
+        def get_samples(self,device='qasm_simulator',noisy=False,shots=1024):
+            
+            def separate_string(string):
+                string = string[::-1]
+                grid = []
+                for y in range(self.Ly):
+                    line = ''
+                    for x in range(self.Lx):
+                        line += string[self._address(x,y)]
+                    grid.append(line)
+                return '\n'.join(grid)
+            
+            temp_qc = copy.deepcopy(self.qc)
+            temp_qc.barrier(self.qr)
+            temp_qc.measure(self.qr,self.cr)
+            try:
+                job = execute(temp_qc,backend=get_backend(device),noise_model=get_noise(noisy),shots=shots,memory=True)
+            except:
+                job = execute(temp_qc,backend=get_backend(device),shots=shots,memory=True)
+            
+            try:
+                data = job.result().get_memory()
+                grid_data = []
+                for string in data:
+                    grid_data.append(separate_string(string))
+            except:
+                grid_data = None
+                
+            stats = job.result().get_counts()
+            grid_stats = {}
+            for string in stats:
+                grid_stats[separate_string(string)] = stats[string]
+                
+            return grid_stats, grid_data
+        
+        def NOT (self,coords,frac=1,axis='x'):
+            '''Implement an rx or ry on the qubit for the given coords, according to the given fraction (`frac=1` is a NOT gate) and the given axis ('x' or 'y').'''
+            if axis=='x':
+                self.qc.rx(np.pi*frac,self.qr[self._address(coords[0],coords[1])])
+            else:
+                self.qc.ry(np.pi*frac,self.qr[self._address(coords[0],coords[1])])
+            
+        def CNOT (self,ctl,tgt,frac=1,axis='x'):
+            '''Controlled version of the `NOT` above'''
+            if axis=='y':
+                self.qc.sdg(self.qr[self._address(tgt[0],tgt[1])])
+            self.qc.h(self.qr[self._address(tgt[0],tgt[1])])
+            self.qc.crz(np.pi*frac,self.qr[self._address(ctl[0],ctl[1])],self.qr[self._address(tgt[0],tgt[1])])
+            self.qc.h(self.qr[self._address(tgt[0],tgt[1])])
+            if axis=='y':
+                self.qc.s(self.qr[self._address(tgt[0],tgt[1])])
