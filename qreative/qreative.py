@@ -29,24 +29,32 @@ def get_backend(device):
     return backend
 
 def get_noise(noisy):
-    """Returns a noise model when input is True"""
+    """Returns a noise model when input is not False or None.
+    A string will be interpreted as the name of a backend, and the noise model of this will be extracted.
+    A float will be interpreted as an error probability for a depolarizing+measurement error model.
+    Anything else (such as True) will give the depolarizing+measurement error model with default error probabilities."""
     if noisy:
         
-        if type(noisy) is float:
-            p_meas = noisy
-            p_gate1 = noisy
+        if type(noisy) is str:
+            device = get_backend(noisy)
+            noise_model = noise.device.basic_device_noise_model( device.properties() )
         else:
-            p_meas = 0.08
-            p_gate1 = 0.04
+            if type(noisy) is float:
+                p_meas = noisy
+                p_gate1 = noisy
+            else:
+                p_meas = 0.08
+                p_gate1 = 0.04
 
-        error_meas = pauli_error([('X',p_meas), ('I', 1 - p_meas)])
-        error_gate1 = depolarizing_error(p_gate1, 1)
-        error_gate2 = error_gate1.kron(error_gate1)
-        
-        noise_model = NoiseModel()
-        noise_model.add_all_qubit_quantum_error(error_meas, "measure")
-        noise_model.add_all_qubit_quantum_error(error_gate1, ["u1", "u2", "u3"])
-        noise_model.add_all_qubit_quantum_error(error_gate2, ["cx"])
+            error_meas = pauli_error([('X',p_meas), ('I', 1 - p_meas)])
+            error_gate1 = depolarizing_error(p_gate1, 1)
+            error_gate2 = error_gate1.kron(error_gate1)
+
+            noise_model = NoiseModel()
+            noise_model.add_all_qubit_quantum_error(error_meas, "measure")
+            noise_model.add_all_qubit_quantum_error(error_gate1, ["u1", "u2", "u3"])
+            noise_model.add_all_qubit_quantum_error(error_gate2, ["cx"])
+            
     else:
         noise_model = None
     return noise_model
