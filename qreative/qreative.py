@@ -6,6 +6,7 @@
 from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, execute, Aer, IBMQ
 from qiskit.providers.aer.noise import NoiseModel
 from qiskit.providers.aer.noise.errors import pauli_error, depolarizing_error
+from qiskit.transpiler import PassManager
 
 import numpy as np
 import random
@@ -964,19 +965,25 @@ class qrng ():
     
 class random_grid ():
     
-        def __init__(self,Lx,Ly):
+        def __init__(self,Lx,Ly,coord_map=None):
         
             self.Lx = Lx
             self.Ly = Ly
+            self.coord_map = coord_map
         
             self.qr = QuantumRegister(Lx*Ly)
             self.cr = ClassicalRegister(Lx*Ly)
             self.qc = QuantumCircuit(self.qr,self.cr)
             
-        def _address(self,x,y):
-            return y*self.Lx + x
+        def address(self,x,y):
+            if self.coord_map:
+                address = coord_map( (x,y) )
+            else:
+                address = y*self.Lx + x
+            return address
         
-        def neighbours(self,x,y):
+        def neighbours(self,coords):
+            (x,y) = coords
             neighbours = []
             for (xx,yy) in [(x+1,y),(x-1,y),(x,y+1),(x,y-1)]:
                 if (xx>=0) and (xx<=self.Lx-1) and (yy>=0) and (yy<=self.Ly-1):
@@ -991,7 +998,7 @@ class random_grid ():
                 for y in range(self.Ly):
                     line = ''
                     for x in range(self.Lx):
-                        line += string[self._address(x,y)]
+                        line += string[self.address(x,y)]
                     grid.append(line)
                 return '\n'.join(grid)
             
@@ -1001,8 +1008,12 @@ class random_grid ():
             try:
                 job = execute(temp_qc,backend=get_backend(device),noise_model=get_noise(noisy),shots=shots,memory=True)
             except:
-                job = execute(temp_qc,backend=get_backend(device),shots=shots,memory=True)
-            
+                try:
+                    backend=get_backend(device)
+                    qobj = compile(temp_qc,backend,pass_manager=PassManager())
+                    job = backend.run(qobj)
+                except:
+                    job = execute(temp_qc,backend=get_backend(device),shots=shots,memory=True)
             try:
                 data = job.result().get_memory()
                 grid_data = []
@@ -1021,16 +1032,16 @@ class random_grid ():
         def NOT (self,coords,frac=1,axis='x'):
             '''Implement an rx or ry on the qubit for the given coords, according to the given fraction (`frac=1` is a NOT gate) and the given axis ('x' or 'y').'''
             if axis=='x':
-                self.qc.rx(np.pi*frac,self.qr[self._address(coords[0],coords[1])])
+                self.qc.rx(np.pi*frac,self.qr[self.address(coords[0],coords[1])])
             else:
-                self.qc.ry(np.pi*frac,self.qr[self._address(coords[0],coords[1])])
+                self.qc.ry(np.pi*frac,self.qr[self.address(coords[0],coords[1])])
             
         def CNOT (self,ctl,tgt,frac=1,axis='x'):
             '''Controlled version of the `NOT` above'''
             if axis=='y':
-                self.qc.sdg(self.qr[self._address(tgt[0],tgt[1])])
-            self.qc.h(self.qr[self._address(tgt[0],tgt[1])])
-            self.qc.crz(np.pi*frac,self.qr[self._address(ctl[0],ctl[1])],self.qr[self._address(tgt[0],tgt[1])])
-            self.qc.h(self.qr[self._address(tgt[0],tgt[1])])
+                self.qc.sdg(self.qr[self.address(tgt[0],tgt[1])])
+            self.qc.h(self.qr[self.address(tgt[0],tgt[1])])
+            self.qc.crz(np.pi*frac,self.qr[self.address(ctl[0],ctl[1])],self.qr[self.address(tgt[0],tgt[1])])
+            self.qc.h(self.qr[self.address(tgt[0],tgt[1])])
             if axis=='y':
-                self.qc.s(self.qr[self._address(tgt[0],tgt[1])])
+                self.qc.s(self.qr[self.address(tgt[0],tgt[1])])
