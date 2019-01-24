@@ -3,7 +3,7 @@
 # Aug 2018 version: Copyright © 2018 James Wootton, University of Basel
 # Later versions:   Copyright © 2018 IBM Research
 
-from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, execute, Aer, IBMQ
+from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, execute, compile, Aer, IBMQ
 from qiskit.providers.aer.noise import NoiseModel
 from qiskit.providers.aer.noise.errors import pauli_error, depolarizing_error
 from qiskit.transpiler import PassManager
@@ -15,6 +15,7 @@ from matplotlib.patches import Circle, Rectangle
 import copy
 import networkx as nx
 from pydub import AudioSegment
+import datetime
 
 try:
     IBMQ.load_accounts()
@@ -339,6 +340,7 @@ def emoticon_superposer (emoticons,bias=0.5,device='qasm_simulator',noisy=False,
         ascii_stats_list.append(ascii_stats)
 
         plt.axis('off')
+        plt.savefig('outputs/emoticon_'+datetime.datetime.now().strftime("%H:%M:%S %p on %B %d, %Y")+'.png')
         plt.show()
     
     # if only one instance was given, output dict rather than list with a single dict
@@ -414,7 +416,7 @@ def image_superposer (all_images,images,bias=0.5,device='qasm_simulator',noisy=F
     device = A string specifying a backend. The noisy behaviour from a real device will result in images other than those intended appearing with non-zero strength.
     shots = Number of times the process is repeated to calculate the fractions used as strengths."""
 
-    image_stats_list = _filename_superposer (all_images,images,bias,device,noise,shots)
+    image_stats_list = _filename_superposer (all_images,images,bias,device,noisy,shots)
     print(image_stats_list)
     
     for image_stats in image_stats_list:  
@@ -434,6 +436,7 @@ def image_superposer (all_images,images,bias=0.5,device='qasm_simulator',noisy=F
                 image = plt.imread( "images/"+filename+".png" )
                 plt.imshow(image,alpha=alpha[j])
         plt.axis('off')
+        plt.savefig('outputs/image_'+datetime.datetime.now().strftime("%H:%M:%S %p on %B %d, %Y")+'.png')
         plt.show()
     
     # if only one instance was given, output dict rather than list with a single dict
@@ -638,7 +641,7 @@ class layout:
         plt.figure(2,figsize=(2*area[0],2*ratio*area[1])) 
         nx.draw(G, self.pos, node_color = color_list, node_size = size_list, labels = labels, with_labels = True,
                 font_color ='w', font_size = 18)
-        plt.show() 
+        plt.show()
         
 class pauli_grid():
     # Allows a quantum circuit to be created, modified and implemented, and visualizes the output in the style of 'Hello Quantum'.
@@ -1009,6 +1012,8 @@ class random_grid ():
                 job = execute(temp_qc,backend=get_backend(device),noise_model=get_noise(noisy),shots=shots,memory=True)
             except:
                 try:
+                    if device=='ibmq_qasm_simulator':
+                        raise
                     backend=get_backend(device)
                     qobj = compile(temp_qc,backend,pass_manager=PassManager())
                     job = backend.run(qobj)
@@ -1026,7 +1031,7 @@ class random_grid ():
             grid_stats = {}
             for string in stats:
                 grid_stats[separate_string(string)] = stats[string]
-                
+            
             return grid_stats, grid_data
         
         def NOT (self,coords,frac=1,axis='x'):
