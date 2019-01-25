@@ -14,8 +14,12 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Rectangle
 import copy
 import networkx as nx
-from pydub import AudioSegment
 import datetime
+
+try:
+    from pydub import AudioSegment
+except:
+    pass
 
 try:
     IBMQ.load_accounts()
