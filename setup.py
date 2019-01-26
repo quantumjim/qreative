@@ -27,7 +27,7 @@ REQUIRED = [
 
 # What packages are optional?
 EXTRAS = {
-    'pydub':0.23.0
+    'pydub':'>=0.23.0'
 }
 
 # The rest you shouldn't have to touch too much :)
