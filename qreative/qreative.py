@@ -1029,7 +1029,9 @@ class random_grid ():
                 for string in data:
                     grid_data.append(separate_string(string))
             except:
-                grid_data = None
+                grid_data = []
+                for string in grid_stats:
+                    grid_data += [string]*grid_stats[string]
                 
             stats = job.result().get_counts()
             grid_stats = {}
