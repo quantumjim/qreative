@@ -31,6 +31,7 @@ def get_backend(device):
     try:
         backend = Aer.get_backend(device)
     except:
+        print("You are using an IBMQ backend. The results for this are provided in accordance with the IBM Q Experience EULA.\nhttps://quantumexperience.ng.bluemix.net/qx/terms"
         backend = IBMQ.get_backend(device)
     return backend
 
