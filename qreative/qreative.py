@@ -21,15 +21,13 @@ try:
 except:
     pass
 
-try:
-    IBMQ.load_accounts()
-except:
-    print("You'll need to set up an IBMQ account to access anything but local simulators. See\n    https://github.com/Qiskit/qiskit-tutorials/blob/master/INSTALL.md\nfor details on how to get an account and register the credentials.")
-
 def get_backend(device):
     """Returns backend object for device specified by input string."""
     try:
-        backend = Aer.get_backend(device)
+        try:
+            backend = Aer.get_backend(device)
+        except:
+            backend = BasicAer.get_backend(device)
     except:
         print("You are using an IBMQ backend. The results for this are provided in accordance with the IBM Q Experience EULA.\nhttps://quantumexperience.ng.bluemix.net/qx/terms"
         backend = IBMQ.get_backend(device)
