@@ -24,12 +24,13 @@ except:
 def get_backend(device):
     """Returns backend object for device specified by input string."""
     try:
+        # First tries the full version of Aer. If that fails, it defaults to the basic version.
         try:
             backend = Aer.get_backend(device)
         except:
             backend = BasicAer.get_backend(device)
     except:
-        print("You are using an IBMQ backend. The results for this are provided in accordance with the IBM Q Experience EULA.\nhttps://quantumexperience.ng.bluemix.net/qx/terms")
+        print("You are using an IBMQ backend. The results for this are provided in accordance with the IBM Q Experience EULA.\nhttps://quantumexperience.ng.bluemix.net/qx/terms") # Legal stuff! Yay!
         backend = IBMQ.get_backend(device)
     return backend
 
@@ -40,25 +41,25 @@ def get_noise(noisy):
     Anything else (such as True) will give the depolarizing+measurement error model with default error probabilities."""
     if noisy:
         
-        if type(noisy) is str:
+        if type(noisy) is str: # get noise information from a real device (via the IBM Q Experience)
             device = get_backend(noisy)
             noise_model = noise.device.basic_device_noise_model( device.properties() )
-        else:
+        else: # make a simple noise model for a given noise strength
             if type(noisy) is float:
                 p_meas = noisy
                 p_gate1 = noisy
-            else:
+            else: # default values
                 p_meas = 0.08
                 p_gate1 = 0.04
 
-            error_meas = pauli_error([('X',p_meas), ('I', 1 - p_meas)])
-            error_gate1 = depolarizing_error(p_gate1, 1)
-            error_gate2 = error_gate1.kron(error_gate1)
+            error_meas = pauli_error([('X',p_meas), ('I', 1 - p_meas)]) # bit flip error with prob p_meas
+            error_gate1 = depolarizing_error(p_gate1, 1) # replaces qubit state with nonsense with prob p_gate1
+            error_gate2 = error_gate1.kron(error_gate1) # as above, but independently on two qubits
 
             noise_model = NoiseModel()
-            noise_model.add_all_qubit_quantum_error(error_meas, "measure")
-            noise_model.add_all_qubit_quantum_error(error_gate1, ["u1", "u2", "u3"])
-            noise_model.add_all_qubit_quantum_error(error_gate2, ["cx"])
+            noise_model.add_all_qubit_quantum_error(error_meas, "measure") # add bit flip noise to measurement
+            noise_model.add_all_qubit_quantum_error(error_gate1, ["u1", "u2", "u3"]) # add depolarising to single qubit gates
+            noise_model.add_all_qubit_quantum_error(error_gate2, ["cx"]) # add two qubit depolarising to two qubit gates
             
     else:
         noise_model = None
@@ -70,9 +71,9 @@ class ladder:
     def __init__(self,d):
         """Create a new ladder object. This has the attribute `value`, which is an int that can be 0 at minimum and the supplied value `d` at maximum. This value is initialized to 0."""
         self.d = d
-        self.qr = QuantumRegister(1)
-        self.cr = ClassicalRegister(1)
-        self.qc = QuantumCircuit(self.qr, self.cr)
+        self.qr = QuantumRegister(1) # declare our single qubit
+        self.cr = ClassicalRegister(1) # declare a single bit to hold the result
+        self.qc = QuantumCircuit(self.qr, self.cr) # combine them in an empty quantum circuit
         
     def add(self,delta):
         """Changes value of ladder object by the given amount `delta`. This is initially done by addition, but it changes to subtraction once the maximum value of `d` is reached. It will then change back to addition once 0 is reached, and so on.
@@ -1055,3 +1056,47 @@ class random_grid ():
             self.qc.h(self.qr[self.address(tgt[0],tgt[1])])
             if axis=='y':
                 self.qc.s(self.qr[self.address(tgt[0],tgt[1])])
+
+                
+class random_mountain():
+    
+    def __init__(self,n):
+        self.n = n
+        self.qr = QuantumRegister(n)
+        self.cr = ClassicalRegister(n)
+        self.qc = QuantumCircuit(self.qr,self.cr)
+        
+    def get_mountain(self,new_data=True,device='qasm_simulator',noisy=False,shots=8192):
+        
+        if new_data:
+            temp_qc = copy.deepcopy(self.qc)
+            temp_qc.measure(self.qr,self.cr)
+            job = execute(temp_qc, backend=get_backend(device),noise_model=get_noise(noisy),shots=shots)
+            stats = job.result().get_counts()
+
+            self.prob = {}
+            for string in ['0'*(self.n-len(bin(j)[2:])) + bin(j)[2:] for j in range(2**self.n)]: # loop over all n-bit strings
+                try:
+                    self.prob[string] = stats[string]/shots
+                except:
+                    self.prob[string] = 0
+        Z = list(self.prob.values())
+        
+        G = nx.Graph()
+        for node in self.prob:
+            G.add_node(node)
+        for node1 in G:
+            for node2 in G:
+                if node1!=node2:
+                    distance = 0
+                    for j in range(self.n):
+                        distance += (node1[j]!=node2[j])
+                    G.add_edge(node1,node2,weight=(distance==1) )
+        pos = nx.spring_layout(G)
+        X = []
+        Y = []
+        for node in pos:
+            X.append( list(pos[node])[0] )
+            Y.append( list(pos[node])[1] )
+
+        return X,Y,Z
