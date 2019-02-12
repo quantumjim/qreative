@@ -4,13 +4,9 @@
 # Later versions:   Copyright © 2018 IBM Research
 
 from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, execute, compile, IBMQ
-
-try:
-    from qiskit import Aer
-    from qiskit.providers.aer.noise import NoiseModel
-    from qiskit.providers.aer.noise.errors import pauli_error, depolarizing_error
-except:
-    from qiskit import BasicAer
+from qiskit import Aer
+from qiskit.providers.aer.noise import NoiseModel
+from qiskit.providers.aer.noise.errors import pauli_error, depolarizing_error
     
 from qiskit.transpiler import PassManager
 
@@ -30,11 +26,7 @@ except:
 def get_backend(device):
     """Returns backend object for device specified by input string."""
     try:
-        # First tries the full version of Aer. If that fails, it defaults to the basic version.
-        try:
-            backend = Aer.get_backend(device)
-        except:
-            backend = BasicAer.get_backend(device)
+        Aer.get_backend(device)
     except:
         print("You are using an IBMQ backend. The results for this are provided in accordance with the IBM Q Experience EULA.\nhttps://quantumexperience.ng.bluemix.net/qx/terms") # Legal stuff! Yay!
         backend = IBMQ.get_backend(device)
