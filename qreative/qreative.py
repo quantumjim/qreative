@@ -3,9 +3,15 @@
 # Aug 2018 version: Copyright © 2018 James Wootton, University of Basel
 # Later versions:   Copyright © 2018 IBM Research
 
-from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, execute, compile, Aer, IBMQ
-from qiskit.providers.aer.noise import NoiseModel
-from qiskit.providers.aer.noise.errors import pauli_error, depolarizing_error
+from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, execute, compile, IBMQ
+
+try:
+    from qiskit import Aer
+    from qiskit.providers.aer.noise import NoiseModel
+    from qiskit.providers.aer.noise.errors import pauli_error, depolarizing_error
+except:
+    from qiskit import BasicAer
+    
 from qiskit.transpiler import PassManager
 
 import numpy as np
