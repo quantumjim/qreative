@@ -8,3 +8,4 @@ dist/
 qreative/__pycache__/
 
 tutorials/.ipynb_checkpoints/*
+tutorials/.DS_Store
