@@ -2,3 +2,9 @@
 build/
 dist/
 *.egg-info/
+
+.DS_Store
+
+qreative/__pycache__/
+
+tutorials/.ipynb_checkpoints/*
