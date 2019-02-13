@@ -1,6 +1,6 @@
-# Creative Quantumness [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/quantumjim/qreative/master?filepath=README.ipynb)
+# Creative Quantumness [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/quantumjim/CreativeQiskit/master?filepath=README.ipynb)
 
-The `qreative` package is a set of tools to use quantum computers for creative projects. It is built on the [Qiskit](https://qiskit.org) framework for quantum programming. The jobs created using `qreative` can be run on simulators, or on IBM's prototype quantum processors.
+The `CreativeQiskit` package is a set of tools to use quantum computers for creative projects. It is built on the [Qiskit](https://qiskit.org) framework for quantum programming. The jobs created using `CreativeQiskit` can be run on simulators, or on IBM's prototype quantum processors.
 
 For how to use, see the [tutorials](tutorials/README.md). Here there are guides on all the tools included in the package.
 
@@ -20,11 +20,11 @@ In addition to telling you how to use the tools in this package, it also provide
 * [How to use real quantum devices with the IBM Q Experience](tutorials/Using-IBM-Q-Experience.ipynb)
 * [How to get quantum random numbers from IBM devices via HTTP](tutorials/qrng_with_http.ipynb)
 
-You are encouraged to not just use the qreative tools, but also get inside the code and play around with them. For that reason, our aim is to make the code very well commented to help you understand what it all does. If you have any requests on what to comment better, make a request [here](https://github.com/quantumjim/qreative/issues/new).
+You are encouraged to not just use the CreativeQiskit tools, but also get inside the code and play around with them. For that reason, our aim is to make the code very well commented to help you understand what it all does. If you have any requests on what to comment better, make a request [here](https://github.com/quantumjim/CreativeQiskit/issues/new).
 
-If you want to pip install, [download this repository](https://github.com/quantumjim/qreative/archive/master.zip) and unzip to get the 'qreative-master' folder. Then navigate to the folder that contains qreative-master via command line, and run the following
+If you want to pip install, [download this repository](https://github.com/quantumjim/CreativeQiskit/archive/master.zip) and unzip to get the 'CreativeQiskit-master' folder. Then navigate to the folder that contains CreativeQiskit-master via command line, and run the following
 
-    pip install -e qreative-master
+    pip install -e CreativeQiskit-master
     
 ## Projects on which the current tools are based
 
@@ -46,9 +46,9 @@ The current tools are based on the following projects.
 
 ## License Stuff
 
-The qreative package is provided under the [Apache 2.0 license](LICENSE.txt). It uses Qiskit to create quantum programs and run simulations. Qiskit is also provided under the Apache 2.0 license.
+The CreativeQiskit package is provided under the [Apache 2.0 license](LICENSE.txt). It uses Qiskit to create quantum programs and run simulations. Qiskit is also provided under the Apache 2.0 license.
 
-Through qreative and Qiskit it is also possible to use real quantum devices and simulators using the IBM Q Experience. This is an optional extra that requires an IBM Q Experience account. Results from this service are provided in accordance with the [IBM Q Experience EULA](https://quantumexperience.ng.bluemix.net/qx/terms).
+Through CreativeQiskit and Qiskit it is also possible to use real quantum devices and simulators using the IBM Q Experience. This is an optional extra that requires an IBM Q Experience account. Results from this service are provided in accordance with the [IBM Q Experience EULA](https://quantumexperience.ng.bluemix.net/qx/terms).
 
 ## Credits
 

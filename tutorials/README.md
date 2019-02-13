@@ -1,12 +1,12 @@
 # Creative Quantumness
 
-The `qreative` package is a set of tools to use quantum computers for creative projects. It is built on the [Qiskit](https://qiskit.org) framework for quantum programming. The jobs created using `qreative` can be run on simulators, or on IBM's prototype quantum processors.
+The `CreativeQiskit` package is a set of tools to use quantum computers for creative projects. It is built on the [Qiskit](https://qiskit.org) framework for quantum programming. The jobs created using `CreativeQiskit` can be run on simulators, or on IBM's prototype quantum processors.
 
 The tools are based on existing creative projects that have been made so far. They are designed to take the essential quantum part of those projects, and present them it a flexible and reusable way.
 
 ## The tools and how to use them
 
-The tools of `qreative`, and tutorials for how to use each of them, can be found in the list below.
+The tools of `CreativeQiskit`, and tutorials for how to use each of them, can be found in the list below.
 
 * [`bell_correlation`](bell_correlation.ipynb)
 * [`ladder`](ladder.ipynb)
