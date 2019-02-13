@@ -12,9 +12,9 @@ from shutil import rmtree
 from setuptools import find_packages, setup, Command
 
 # Package meta-data.
-NAME = 'qreative'
+NAME = 'CreativeQiskit'
 DESCRIPTION = 'Creative tools for quantum computers'
-URL = 'https://github.com/quantumjim/creative'
+URL = 'https://github.com/quantumjim/qreative'
 EMAIL = 'jwo@zurich.ibm.com'
 AUTHOR = 'James R. Wootton, IBM Research'
 REQUIRES_PYTHON = '>=3.6.0'
