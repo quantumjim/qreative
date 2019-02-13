@@ -32,25 +32,3 @@ The `device` kwarg is a string that specifies the backend on which the program i
 Current prototype devices are imperfect, and any run will encounter errors. The `noisy` kwarg determines whether this noise is also simulated when using the local simulator. The default value `False` means that no noise is simulated. Assigning this a float value, such as `noisy=0.1`, sets up a simple noise model in which the supplied value is used as the probability for certain error events occuring. If a string specifying a prototype device is supplied, such as `noisy='ibmq_16_melbourne'` the noise will mimic that experienced on the prototype device.
 
 Each quantum program can be run multiple times so that the any randomness in the output can be analyzed. The number of repetitions is given by `shots`, which takes the default value 1024 in most cases. The maxmimum value that can be given is 8192.
-
-## Projects on which the current tools are based
-
-The current tools are based on the following projects.
-
-* [Battleships with partial NOT gates](https://medium.com/qiskit/how-to-program-a-quantum-computer-982a9329ed02) inspired `ladder`.
-* [Battleships with complementary measurements](https://medium.com/@decodoku/how-to-program-a-quantum-computer-part-2-f0d3eee872fe) inspired `twobit`.
-* [Quantum Battleships](https://medium.com/@decodoku/quantum-battleships-the-first-multiplayer-game-for-a-quantum-computer-e4d600ccb3f3) inspired `bell_correlation`.
-* [Quantum Emoticons](https://medium.com/qiskit/making-a-quantum-computer-smile-cee86a6fc1de) inspired `emoticon_superposer`.
-* [Image Superposer](https://medium.com/qiskit/a-quantum-superposition-of-a-tiger-and-a-bear-b461e3b23908)
- inspired `image_superposer`.
-* [Quantum Awesomeness](https://github.com/Qiskit/qiskit-tutorials/blob/master/community/games/quantum_awesomeness.ipynb) inspired `layout`.
-* [Audio Superposer](https://github.com/Qiskit/qiskit-tutorials/blob/master/community/hello_world/laurel_or_yanny.ipynb) inspired `audio_superposer`.
-* [Hello Qiskit](https://github.com/Qiskit/qiskit-tutorials/blob/master/community/games/Hello_Qiskit.ipynb)
-  and [Hello Quantum](http://helloquantum.mybluemix.net/) inspired `pauli_grid`.
-* [Quantum Tic-Tac-Toe](https://github.com/Qiskit/qiskit-tutorials/blob/master/community/games/quantum_tic_tac_toe.ipynb)  inspired `random_grid`.
-* [Quantum 8-Ball](https://github.com/Qiskit/qiskit-tutorials/blob/master/community/hello_world/quantum_8ball.ipynb)  inspired `qrng`.
-* [Quantum Slot Machine](https://github.com/Qiskit/qiskit-tutorials/blob/master/community/games/quantum_slot_machine.ipynb)  inspired `qrng`.
-
-## Credits
-
-This project was initiated by James Wootton while at the [Condensed Matter and Quantum Computing Theory Group](http://www.quantumtheory.unibas.ch/) of the University of Basel. He continues to develop it while at IBM Research. Contributions are welcome.
