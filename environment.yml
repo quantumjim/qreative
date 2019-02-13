@@ -1,8 +1,0 @@
-name: QISKitenv
-dependencies:
-- python=3
-- pip
-- matplotlib
-- notebook
-- pip:
-    - qiskit

@@ -22,7 +22,7 @@ VERSION = None
 
 # What packages are required for this module to be executed?
 REQUIRED = [
-    'numpy', 'matplotlib', 'networkx','pydub'
+    'qiskit', 'qiskit-Aer', 'numpy', 'matplotlib', 'networkx','pydub'
 ]
 
 # What packages are optional?
