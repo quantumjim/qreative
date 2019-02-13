@@ -26,7 +26,7 @@ except:
 def get_backend(device):
     """Returns backend object for device specified by input string."""
     try:
-        Aer.get_backend(device)
+        backend = Aer.get_backend(device)
     except:
         print("You are using an IBMQ backend. The results for this are provided in accordance with the IBM Q Experience EULA.\nhttps://quantumexperience.ng.bluemix.net/qx/terms") # Legal stuff! Yay!
         backend = IBMQ.get_backend(device)
