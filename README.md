@@ -10,7 +10,7 @@ For how to use, see the [tutorials](tutorials/README.md). Here there are guides 
 * [`pauli_grid` to visualize what goes on in a pair of qubits](tutorials/pauli_grid.ipynb)
 * [`qrng` for quantum random numbers](tutorials/qrng.ipynb)
 * [`random_grid` for procedurally generated grids](tutorials/random_grid.ipynb)
-* [An application of `randomn_grid` to make random maps](tutorials/random-maps-with-random_grid.ipynb)
+* [An application of `random_grid` to make random maps](tutorials/random-maps-with-random_grid.ipynb)
 * [`random_mountain` for procedurally generated mountains](tutorials/random_mountain.ipynb)
 * [Methods to turn superposition states into images and audio](tutorials/superposers.ipynb)
 * [`two_bit` to implement game mechanics based on quantum measurement](tutorials/twobit.ipynb)
