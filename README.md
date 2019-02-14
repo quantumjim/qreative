@@ -44,7 +44,13 @@ The current tools are based on the following projects.
 * [Quantum 8-Ball](https://github.com/Qiskit/qiskit-tutorials/blob/master/community/hello_world/quantum_8ball.ipynb)  inspired `qrng`.
 * [Quantum Slot Machine](https://github.com/Qiskit/qiskit-tutorials/blob/master/community/games/quantum_slot_machine.ipynb)  inspired `qrng`.
 
-## License Stuff
+## Other projects you might enjoy
+
+* [Quantum toy piano](https://github.com/JavaFXpert/quantum-toy-piano-ibmq/blob/master/README.md) for jamming with a quantum computer. By [James Weaver](https://github.com/JavaFXpert).
+
+* [Wavefunction collapse](https://github.com/quantumjim/wfc_python). A quantum-inspired algorithm for procedural generation, adapted to use real quantum wavefunction collapse. Based on the implementation by [ikarth](https://github.com/ikarth). The original algorithm by [mxgmn](https://github.com/mxgmn).
+
+## License stuff
 
 The CreativeQiskit package is provided under the [Apache 2.0 license](LICENSE.txt). It uses Qiskit to create quantum programs and run simulations. Qiskit is also provided under the Apache 2.0 license.
 
