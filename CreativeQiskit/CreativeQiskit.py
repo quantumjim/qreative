@@ -17,11 +17,8 @@ from matplotlib.patches import Circle, Rectangle
 import copy
 import networkx as nx
 import datetime
+from pydub import AudioSegment # pydub can be a bit dodgy and might cause some warnings
 
-try:
-    from pydub import AudioSegment
-except:
-    pass
 
 def get_backend(device):
     """Returns backend object for device specified by input string."""
@@ -57,8 +54,7 @@ def get_noise(noisy):
             noise_model = NoiseModel()
             noise_model.add_all_qubit_quantum_error(error_meas, "measure") # add bit flip noise to measurement
             noise_model.add_all_qubit_quantum_error(error_gate1, ["u1", "u2", "u3"]) # add depolarising to single qubit gates
-            noise_model.add_all_qubit_quantum_error(error_gate2, ["cx"]) # add two qubit depolarising to two qubit gates
-            
+            noise_model.add_all_qubit_quantum_error(error_gate2, ["cx"]) # add two qubit depolarising to two qubit gates  
     else:
         noise_model = None
     return noise_model
@@ -151,7 +147,7 @@ class twobit:
             p = stats['1']/shots
         else:
             p = 0
-        if mitigate:
+        if mitigate: # if p is close to 0 or 1, just make it 0 or 1
             if p<0.1:
                 p = 0
             elif p>0.9:
@@ -952,7 +948,7 @@ class qrng ():
         self.n = self.n+1 % self.num
     
     def rand_int(self):
-        
+        # get a random integer
         rand_int = self.int_list[self.n]
         
         self._iterate()
@@ -960,7 +956,7 @@ class qrng ():
         return rand_int
     
     def rand(self):
-        
+        # get a random float
         rand_float = self.int_list[self.n] / 2**self.precision
         
         self._iterate()
@@ -969,7 +965,7 @@ class qrng ():
 
     
 class random_grid ():
-    
+        """Creates an Lx by Ly grid of random bit values"""
         def __init__(self,Lx,Ly,coord_map=None):
         
             self.Lx = Lx
@@ -981,6 +977,8 @@ class random_grid ():
             self.qc = QuantumCircuit(self.qr,self.cr)
             
         def address(self,x,y):
+            # returns the index for the qubit associated with grid point (x,y)
+            # 
             if self.coord_map:
                 address = coord_map( (x,y) )
             else:
@@ -988,6 +986,7 @@ class random_grid ():
             return address
         
         def neighbours(self,coords):
+            # determines a list of coordinates that neighbour the input coords
             (x,y) = coords
             neighbours = []
             for (xx,yy) in [(x+1,y),(x-1,y),(x,y+1),(x,y-1)]:
@@ -996,7 +995,7 @@ class random_grid ():
             return neighbours
                 
         def get_samples(self,device='qasm_simulator',noisy=False,shots=1024):
-            
+            # run the program and get samples
             def separate_string(string):
                 string = string[::-1]
                 grid = []
@@ -1010,7 +1009,9 @@ class random_grid ():
             temp_qc = copy.deepcopy(self.qc)
             temp_qc.barrier(self.qr)
             temp_qc.measure(self.qr,self.cr)
-            try:
+            
+            # different backends require different executions, and this block somehow works
+            try: 
                 job = execute(temp_qc,backend=get_backend(device),noise_model=get_noise(noisy),shots=shots,memory=True)
             except:
                 try:
@@ -1021,20 +1022,21 @@ class random_grid ():
                     job = backend.run(qobj)
                 except:
                     job = execute(temp_qc,backend=get_backend(device),shots=shots,memory=True)
-            try:
-                data = job.result().get_memory()
-                grid_data = []
-                for string in data:
-                    grid_data.append(separate_string(string))
-            except:
-                grid_data = []
-                for string in grid_stats:
-                    grid_data += [string]*grid_stats[string]
                 
             stats = job.result().get_counts()
             grid_stats = {}
             for string in stats:
                 grid_stats[separate_string(string)] = stats[string]
+                
+            try: # real memory
+                data = job.result().get_memory()
+                grid_data = []
+                for string in data:
+                    grid_data.append(separate_string(string))
+            except: # fake memory from stats
+                grid_data = []
+                for string in grid_stats:
+                    grid_data += [string]*grid_stats[string]
             
             return grid_stats, grid_data
         
@@ -1057,15 +1059,16 @@ class random_grid ():
 
                 
 class random_mountain():
-    
+    '''Create a random set of (x,y,z) coordinates that look something like a mountain'''
     def __init__(self,n):
+        # initializes the quantum circuit of n qubits used to generate the n points
         self.n = n
         self.qr = QuantumRegister(n)
         self.cr = ClassicalRegister(n)
         self.qc = QuantumCircuit(self.qr,self.cr)
         
     def get_mountain(self,new_data=True,device='qasm_simulator',noisy=False,shots=8192):
-        
+        # run based on the current circuit performed on self.qc
         if new_data:
             temp_qc = copy.deepcopy(self.qc)
             temp_qc.measure(self.qr,self.cr)
