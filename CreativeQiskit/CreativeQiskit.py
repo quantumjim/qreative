@@ -1067,8 +1067,10 @@ class random_mountain():
         self.cr = ClassicalRegister(n)
         self.qc = QuantumCircuit(self.qr,self.cr)
         
-    def get_mountain(self,new_data=True,device='qasm_simulator',noisy=False,shots=8192):
+    def get_mountain(self,new_data=True,method='square',device='qasm_simulator',noisy=False,shots=None):
         # run based on the current circuit performed on self.qc
+        if shots==None:
+            shots = 2**(2*n)
         if new_data:
             temp_qc = copy.deepcopy(self.qc)
             temp_qc.measure(self.qr,self.cr)
@@ -1081,23 +1083,51 @@ class random_mountain():
                     self.prob[string] = stats[string]/shots
                 except:
                     self.prob[string] = 0
-        Z = list(self.prob.values())
+           
+        nodes = sorted(self.prob, key=self.prob.get)[::-1]
+        Z = {}
+        for node in nodes:
+            Z[node] = max(self.prob[node],1/shots)
+                    
+        if method=='rings': 
+            pos = {}
+            for node in nodes:
+                distance = 0
+                for j in range(self.n):
+                    distance += (node[j]!=nodes[0][j])/self.n
+                theta = random.random()*2*np.pi
+                pos[node] = (distance*np.cos(theta),distance*np.sin(theta))
+        else:
         
-        G = nx.Graph()
-        for node in self.prob:
-            G.add_node(node)
-        for node1 in G:
-            for node2 in G:
-                if node1!=node2:
-                    distance = 0
+            Lx = int(2**np.ceil(self.n/2))
+            Ly = int(2**np.floor(self.n/2))
+            
+            strings = [ ['' for k in range(Lx)] for j in range(Ly)]
+            for y in range(Ly):
+                for x in range(Lx):
                     for j in range(self.n):
-                        distance += (node1[j]!=node2[j])
-                    G.add_edge(node1,node2,weight=(distance==1) )
-        pos = nx.spring_layout(G)
-        X = []
-        Y = []
-        for node in pos:
-            X.append( list(pos[node])[0] )
-            Y.append( list(pos[node])[1] )
-
-        return X,Y,Z
+                        if (j%2)==0:
+                            xx = np.floor(x/2**(j/2))
+                            strings[y][x] = str( int( ( xx + np.floor(xx/2) )%2 ) ) + strings[y][x]
+                        else:
+                            yy = np.floor(y/2**((j-1)/2))
+                            strings[y][x] = str( int( ( yy + np.floor(yy/2) )%2 ) ) + strings[y][x]
+        
+            center = strings[int(np.floor(Ly/2))][int(np.floor(Lx/2))]
+            maxstring = nodes[0]
+            diff = ''
+            for j in range(self.n):
+                diff += '0'*(center[j]==maxstring[j]) + '1'*(center[j]!=maxstring[j])
+            for y in range(Ly):
+                for x in range(Lx):
+                    newstring = ''
+                    for j in range(self.n):
+                        newstring += strings[y][x][j]*(diff[j]=='0') + ('0'*(strings[y][x][j]=='1')+'1'*(strings[y][x][j]=='0'))*(diff[j]=='1')
+                    strings[y][x] = newstring
+            
+            pos = {}
+            for y in range(Ly):
+                for x in range(Lx):
+                    pos[strings[y][x]] = (x,y)
+   
+        return pos,Z
