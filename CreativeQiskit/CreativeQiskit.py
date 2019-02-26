@@ -7,6 +7,7 @@ from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, execute, 
 from qiskit import Aer
 from qiskit.providers.aer.noise import NoiseModel
 from qiskit.providers.aer.noise.errors import pauli_error, depolarizing_error
+from qiskit.providers.aer import noise
     
 from qiskit.transpiler import PassManager
 
@@ -1070,7 +1071,7 @@ class random_mountain():
     def get_mountain(self,new_data=True,method='square',device='qasm_simulator',noisy=False,shots=None):
         # run based on the current circuit performed on self.qc
         if shots==None:
-            shots = 2**(2*n)
+            shots = 2**(2*self.n)
         if new_data:
             temp_qc = copy.deepcopy(self.qc)
             temp_qc.measure(self.qr,self.cr)
