@@ -3,7 +3,7 @@
 # Aug 2018 version: Copyright © 2018 James Wootton, University of Basel
 # Later versions:   Copyright © 2018 IBM Research
 
-from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, execute, compile, IBMQ
+from qiskit import ClassicalRegister, QuantumRegister, QuantumCircuit, execute, IBMQ
 from qiskit import Aer
 from qiskit.providers.aer.noise import NoiseModel
 from qiskit.providers.aer.noise.errors import pauli_error, depolarizing_error
@@ -18,8 +18,15 @@ from matplotlib.patches import Circle, Rectangle
 import copy
 import networkx as nx
 import datetime
-from pydub import AudioSegment # pydub can be a bit dodgy and might cause some warnings
+try:
+    from pydub import AudioSegment # pydub can be a bit dodgy and might cause some warnings
+except:
+    pass
 
+try:
+    IBMQ.load_account()
+except:
+    print("No IBMQ account was found, so you'll only be able to simulate locally.")
 
 def get_backend(device):
     """Returns backend object for device specified by input string."""
@@ -27,7 +34,10 @@ def get_backend(device):
         backend = Aer.get_backend(device)
     except:
         print("You are using an IBMQ backend. The results for this are provided in accordance with the IBM Q Experience EULA.\nhttps://quantumexperience.ng.bluemix.net/qx/terms") # Legal stuff! Yay!
-        backend = IBMQ.get_backend(device)
+        for provider in IBMQ.providers():
+            for potential_backend in provider.backends():
+                if potential_backend.name()==device_name:
+                    backend = potential_backend 
     return backend
 
 def get_noise(noisy):
@@ -50,7 +60,7 @@ def get_noise(noisy):
 
             error_meas = pauli_error([('X',p_meas), ('I', 1 - p_meas)]) # bit flip error with prob p_meas
             error_gate1 = depolarizing_error(p_gate1, 1) # replaces qubit state with nonsense with prob p_gate1
-            error_gate2 = error_gate1.kron(error_gate1) # as above, but independently on two qubits
+            error_gate2 = error_gate1.tensor(error_gate1) # as above, but independently on two qubits
 
             noise_model = NoiseModel()
             noise_model.add_all_qubit_quantum_error(error_meas, "measure") # add bit flip noise to measurement
@@ -475,8 +485,7 @@ class layout:
         pairs = Dictionary detailing the pairs of qubits for which cnot gates can be directly implemented. Each value is a list of two qubits for which this is possible. The corresponding key is a string that is used as the name of the pair.
         pos = A dictionary of positions for qubits, to be used in plots.
         """
-        if device in ['ibmq_5_tenerife', 'ibmq_16_melbourne']:
-                        
+        if device in ['ibmq_5_yorktown', 'ibmq_16_melbourne']:          
             backend = get_backend(device)
             self.num = backend.configuration().n_qubits
             coupling = backend.configuration().coupling_map
@@ -485,11 +494,8 @@ class layout:
             for pair in coupling:
                 self.pairs[chr(char)] = pair
                 char += 1
-            if device in ['ibmq_5_tenerife']:
+            if device in ['ibmq_5_yorktown']:
                 self.pos = { 0: [1,1], 1: [1,0], 2: [0.5,0.5], 3: [0,0], 4: [0,1] }        
-            elif device=='ibmq_16_rueschlikon':
-                self.pos = { 0: [0,0], 1: [0,1],  2: [1,1],  3: [2,1],  4: [3,1],  5: [4,1],  6: [5,1],  7: [6,1],
-8: [7,1], 9: [7,0], 10: [6,0], 11: [5,0], 12: [4,0], 13: [3,0], 14: [2,0], 15: [1,0] }
             elif device=='ibmq_16_melbourne':
                 self.pos = { 0: (0,1), 1: (1,1),  2: (2,1),  3: (3,1),  4: (4,1),  5: (5,1),  6: (6,1),
                 7: (7,0), 8: (6,0), 9: (5,0), 10: (4,0), 11: (3,0), 12: (2,0), 13: (1,0) }
@@ -912,10 +918,9 @@ class qrng ():
         qc.measure(q,c)
         
         if sim:
-            backend=Aer.get_backend('qasm_simulator')
+            backend = get_backend('qasm_simulator')
         else:
-            IBMQ.load_accounts()
-            backend=IBMQ.get_backend('ibmq_5_tenerife')
+            backend = get_backend('ibmq_5_yorktown')
         
         if verbose and not sim:
             print('Sending job to quantum device')
